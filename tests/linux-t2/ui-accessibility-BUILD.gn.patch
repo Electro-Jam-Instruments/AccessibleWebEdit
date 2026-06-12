@@ -1,5 +1,5 @@
---- /tmp/orig_build.gn	2026-06-12 10:02:35.974406562 +0000
-+++ ui/accessibility/BUILD.gn	2026-06-12 10:01:03.955178899 +0000
+--- /tmp/orig_build.gn	2026-06-12 20:04:44.130840251 +0000
++++ ui/accessibility/BUILD.gn	2026-06-12 20:02:58.674136786 +0000
 @@ -11,6 +11,13 @@
  import("//tools/json_schema_compiler/json_schema_api.gni")
  import("//ui/base/ui_features.gni")
@@ -39,7 +39,7 @@
    }
  
    deps = []
-@@ -311,6 +320,26 @@
+@@ -311,6 +320,27 @@
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
  }
  
@@ -48,6 +48,7 @@
 +  sources = [
 +    "ax_event_generator_t2_unittest.cc",
 +    "ax_event_generator_unittest.cc",
++    "ax_matrix_t2_unittest.cc",
 +    "ax_enum_test_util.cc",
 +    "ax_enum_test_util.h",
 +    "ax_t2_test_main.cc",

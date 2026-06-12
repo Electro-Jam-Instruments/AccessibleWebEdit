@@ -1,6 +1,6 @@
 # 10 — Editing Scenario Matrix: Loop, Word Online, Docs
 
-Status: GRADED 2026-06-12 against Chrome 149 tag 149.0.7827.115 source (checkout provenance in results/ENVIRONMENT.md). Grades: SUPPORTED / BROWSER-WORK / OPEN, each with file:line citations.
+Status: GRADED 2026-06-12 against Chrome 149 tag 149.0.7827.115 source; 12 rows additionally VERIFIED BY TEST at the generated-event layer the same day (results/T2-linux-generated-events.md, results/matrix-linux-generated-events.md). Grades: SUPPORTED / BROWSER-WORK / OPEN, each with file:line citations.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Source findings:
 
 Verdict: the scenario is functionally expressible today through SelectionItem plus Selection v1 plus Table patterns with two-way actions. SelectionPattern2 is a genuine BROWSER-WORK item, and small: GetSelectedItems already enumerates the selection, so the four properties derive from existing data. Ideal overlay patch and a strong standards exhibit: the platform API outruns what the browser surfaces.
 
-OPEN: when text selection inside a cell (tree-data selection, Text pattern) coexists or transitions with cell-level selection (selected attributes, SelectionItem pattern), what should ATs receive and in what order? Both mechanisms exist independently; the handoff is the test-matrix item T2-7.
+OPEN (NARROWED 2026-06-12): when text selection inside a cell transitions to cell-level selection, what should ATs receive and in what order? The generation half is now answered by test (results/matrix-linux-generated-events.md): in one atomic update the two mechanisms compose cleanly — documentSelectionChanged + selectedChanged + selectedChildrenChanged in a single event set, no collision, and textSelectionChanged correctly stops once the focus leaves the text field. Remaining for T2-7 on the VM: UIA translation ordering and NVDA announcement behavior only.
 
 ## Scenario inventory — GRADED (2026-06-12)
 

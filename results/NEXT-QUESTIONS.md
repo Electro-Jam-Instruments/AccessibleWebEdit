@@ -10,6 +10,8 @@ Date: 2026-06-12. Consolidated from the Linux generated-event runs (results/T2-l
 
 3. **Remote cursors/selections have no schema at all** (docs/10 grading). AXTreeData carries exactly one self-selection; UIA has no non-self-caret concept either. Decide: model remote selections as highlight markers + AnnotationType_Highlighted (works today, semantically lossy) or propose new schema — this is a genuine standards-track item, arguably the strongest "the web platform is missing something" exhibit we have.
 
+3b. **Formatting events need `State::kRichlyEditable` on text nodes** (new, verified by test 2026-06-12): text-attribute change events are gated on the changed node itself being richly editable — plain `kEditable` field ancestry produces zero events. Section 03 must require canvas text nodes to carry kRichlyEditable, mirroring Blink's contenteditable descendants. See results/matrix-linux-generated-events.md.
+
 4. **Edit-origin marking does not exist.** A remote collaborator's text delta fires the identical EDITABLE_TEXT_CHANGED as local typing; nothing in AXTreeUpdate/AXEventGenerator carries origin. Decide whether the bridge should propose an origin field (standards-track) or the editor should moderate announcements app-side (live-region etiquette) — affects the Loop/Word-Online story directly.
 
 ## Windows VM verification queue (TASK-00 blocked items)
@@ -18,7 +20,7 @@ Note (2026-06-12): AT-level verification uses **NVDA speech logs**, not Narrator
 
 5. **UIA finalize end-to-end:** rerun T2-1/2/3/5 shapes under `ax_dump_events` on Windows; confirm UIA_Text_TextChanged / TextSelectionChanged emission and Text-pattern gating (browser_accessibility_manager_win.cc:1300-1314), including question #2 above.
 6. **T2-4 composition:** OnActiveComposition → GetActiveComposition/GetConversionTarget round-trip and which UIA events accompany commit. Note found during grading: committed compositions deliberately defer to the standard text-changed path (ax_platform_node_win.cc:836-848) — verify no double announcement.
-7. **T2-6 action coverage** (PdfAXActionTarget mirror) and **T2-7 cell-vs-text selection handoff** — both Windows-only by nature.
+7. **T2-6 action coverage** (PdfAXActionTarget mirror) remains Windows-only. **T2-7's generation half is now answered** (results/matrix-linux-generated-events.md: the two selection mechanisms compose cleanly and atomically); only UIA ordering + NVDA announcements remain for the VM.
 
 ## docs/10 grading fallout — scoping decisions
 
