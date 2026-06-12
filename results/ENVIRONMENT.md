@@ -1,24 +1,36 @@
 # Linux Generated-Event Test Environment
 
-Date: 2026-06-12. This file records how the Chromium 149.0.7827.115 source was obtained and built in the Claude Code cloud container, including deviations from the planned `gclient` flow and why they were necessary. Results produced here are at the **AXEventGenerator (cross-platform) level**; the Windows UIA finalize layer (BrowserAccessibilityManagerWin → UIA_Text_TextChangedEventId etc.) still requires the TASK-00 VM.
+Date: 2026-06-12. This file records how Chromium 149.0.7827.115 source was obtained and built in the Claude Code cloud container, including every deviation from a stock checkout and why it was necessary. Results produced here are at the **AXEventGenerator (cross-platform) level**; the Windows UIA finalize layer still requires the TASK-00 VM.
 
 ## What the Linux run can and cannot prove
 
 - CAN: which AXEventGenerator events fire for synthetic AXTreeUpdate deltas (T2-1, T2-2, T2-3, T2-5 at the generated-event level). Per docs/09 Finding 1, the Windows UIA event surface is driven by these generated events, so this is the load-bearing layer.
-- CANNOT: the final UIA event IDs, Text pattern behavior, ax_dump_events output, or anything Narrator-observable. Those remain on the Windows VM work queue.
+- CANNOT: final UIA event IDs, Text pattern behavior, ax_dump_events output, or anything Narrator-observable. Those remain on the Windows VM queue (TASK-00, T2-1..T2-7).
 
-## Source acquisition (deviation from plan)
+## Source acquisition
 
-The container's network policy blocks `chromium.googlesource.com` (HTTP 403 host_not_allowed), which rules out `fetch`/`gclient`. The disk budget (~31 GB free) also rules out a full sync. Instead:
+The container's network policy blocks `chromium.googlesource.com` (403 host_not_allowed) and the CIPD package host, ruling out `fetch`/`gclient` and the DEPS-pinned gn binary. Disk (~31 GB free) also rules out a full checkout. Instead:
 
-- Source: official release tarball `https://commondatastorage.googleapis.com/chromium-browser-official/chromium-149.0.7827.115.tar.xz` (5.76 GB). This artifact is generated from the exact release tag with all DEPS-pinned third_party vendored, no git history — it satisfies the "minimal no-history checkout pinned to 149.0.7827.115" requirement; line numbers in docs/09 and docs/10 are valid against it.
-- Partial extraction: only the dependency cone of `//ui/accessibility:accessibility_unittests` was extracted (base, build, buildtools, mojo, testing, tools, ui, url, and ~25 third_party libs). blink, v8, chrome, content were never extracted.
-- GN scoping: the `.gn` dotfile's `root` was pointed at `//ui/accessibility` so GN only loads the extracted subgraph. GN binary is Ubuntu noble's `generate-ninja` (version 1000, 03d10f1) because the CIPD host for the pinned gn is also blocked.
+- Source: official release tarball `chromium-149.0.7827.115.tar.xz` (5.76 GB) from commondatastorage.googleapis.com — generated from the exact release tag with all DEPS third_party vendored, no git history. Line numbers in docs/09 and docs/10 are valid against it.
+- Partial extraction: the dependency cone of the test target plus all `.gn`/`.gni` files tree-wide (11,104 files; GN evaluates the whole-tree build graph even for one root target). Individual missing files (BRANDING/VERSION data files read by exec_script, helper scripts) were fetched from the chromium GitHub mirror at the same tag.
+- Toolchain (all exactly DEPS-pinned, from allowed hosts): Chromium clang `llvmorg-23-init-10931-g20b6ec66-8`, Rust toolchain `rustc 1.96.0 (4c4205163a...)`, Debian bullseye amd64 sysroot. Compiler and sources are fully canonical.
+- gn binary: Debian `generate-ninja 0.0~git20260220.2c775ed` (Feb 2026; the exact pin `1740f5c2` is unreachable through allowed hosts). gn only generates ninja files; any incompatibility fails loudly at gen time, not silently at test time.
 
-## Toolchain
+## Local modifications ledger (complete)
 
-Recorded after the build (see below): clang, sysroot, gn args.
+Build-configuration only; zero changes to any `.cc`/`.h` under test. Each is in the scratch checkout, not upstream.
+
+1. `.gn` dotfile: `root = "//ui/accessibility/t2"` (scopes GN to the test target's cone); `expand_directory_allowlist` line removed (dotfile feature postdating the gn binary).
+2. `build/toolchain/gcc_toolchain.gni`: six `inputs = rustc_wrapper_inputs` lines commented (tool-inputs for rust postdates this gn; affects rebuild tracking only — irrelevant for a one-shot build).
+3. `ui/accessibility/BUILD.gn`: new `ax_t2_minimal` GN arg gating ax_base's `//ui/base`+`//ui/strings`+l10n deps, mirroring the upstream `is_chromeos` branch of the same file; new `ax_t2_unittests` test target (T2 tests + existing `ax_event_generator_unittest.cc` baseline + mojo-free main); T2 test file registered in `accessibility_unittests` for future canonical runs.
+4. `ui/accessibility/t2/BUILD.gn` (new): one-line group wrapping the test target, used as GN root.
+5. `ui/accessibility/ax_event_generator_t2_unittest.cc`, `ax_t2_test_main.cc` (new): the T2 tests and test main.
+6. Resolution-only assert shims (`assert(true || ...)`) in four BUILD.gn files: `ui/native_window_tracker`, `ui/wm`, `ui/wm/public`, `chrome/browser/background/extensions`. GN resolves every target defined in any loaded file, so sibling targets of our deps (e.g. gfx_unittests → //ui/base → views) resolve even though they are never built; these four asserts assume aura/extensions configs we don't use. Verified post-gen via `gn desc`: none of the shimmed directories appear in the ninja build cone of the test target.
+
+## Build configuration (out/rel/args.gn)
+
+`is_debug=false`, `is_component_build=true`, `symbol_level=0`, `dcheck_always_on=true` (DCHECKs catch malformed tree updates in tests), `use_remoteexec=false`, `use_siso=false`, `use_aura=false` (keeps //ui/aura out of the accessibility component itself), `use_glib=true` (from sysroot, as on upstream CI), `ozone_auto_platforms=false`, `ozone_platform="headless"`, `ozone_platform_x11=false` (no display in container; prunes x11→remoting edge), `ax_t2_minimal=true` (see ledger #3). Everything else default.
 
 ## Build
 
-(filled in after the build completes)
+(filled in after the build completes: timings, cone size, test results pointer)
