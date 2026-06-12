@@ -1,0 +1,6 @@
+# Root scope for the T2 generated-event test build: resolves only the
+# minimal test target's dependency cone.
+group("t2") {
+  testonly = true
+  deps = [ "//ui/accessibility:ax_t2_unittests" ]
+}

@@ -1,0 +1,15 @@
+is_debug = false
+is_component_build = true
+symbol_level = 0
+dcheck_always_on = true
+use_remoteexec = false
+use_siso = false
+use_aura = false
+use_glib = true
+treat_warnings_as_errors = false
+ax_t2_minimal = true
+ozone_auto_platforms = false
+ozone_platform = "headless"
+ozone_platform_headless = true
+ozone_platform_x11 = false
+enable_skia_graphite = false

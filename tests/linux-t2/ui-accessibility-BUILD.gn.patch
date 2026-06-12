@@ -1,0 +1,68 @@
+--- /tmp/orig_build.gn	2026-06-12 10:02:35.974406562 +0000
++++ ui/accessibility/BUILD.gn	2026-06-12 10:01:03.955178899 +0000
+@@ -11,6 +11,13 @@
+ import("//tools/json_schema_compiler/json_schema_api.gni")
+ import("//ui/base/ui_features.gni")
+ 
++declare_args() {
++  # Build ui/accessibility without the desktop-linux localization deps,
++  # matching the upstream is_chromeos configuration. Used for the T2
++  # generated-event test harness on constrained hosts.
++  ax_t2_minimal = false
++}
++
+ if (is_win) {
+   import("//build/toolchain/win/midl.gni")
+ }
+@@ -104,7 +111,7 @@
+     "ax_updates_and_events.h",
+   ]
+ 
+-  if (!is_chromeos && !is_fuchsia) {
++  if (!is_chromeos && !is_fuchsia && !ax_t2_minimal) {
+     sources += [
+       "ax_enum_localization_util.cc",
+       "ax_enum_localization_util.h",
+@@ -125,12 +132,14 @@
+     "//ui/gfx/geometry",
+   ]
+ 
+-  if (!is_chromeos) {
++  if (!is_chromeos && !ax_t2_minimal) {
+     public_deps += [
+       "//base:i18n",
+       "//ui/base",
+       "//ui/strings",
+     ]
++  } else if (ax_t2_minimal) {
++    public_deps += [ "//base:i18n" ]
+   }
+ 
+   deps = []
+@@ -311,6 +320,26 @@
+   configs += [ "//build/config/compiler:no_exit_time_destructors" ]
+ }
+ 
++test("ax_t2_unittests") {
++  testonly = true
++  sources = [
++    "ax_event_generator_t2_unittest.cc",
++    "ax_event_generator_unittest.cc",
++    "ax_enum_test_util.cc",
++    "ax_enum_test_util.h",
++    "ax_t2_test_main.cc",
++    "test_ax_tree_update.cc",
++    "test_ax_tree_update.h",
++  ]
++  deps = [
++    ":accessibility_internal",
++    "//base",
++    "//base/test:test_support",
++    "//testing/gmock",
++    "//testing/gtest",
++  ]
++}
++
+ test("accessibility_unittests") {
+   testonly = true
+   sources = [

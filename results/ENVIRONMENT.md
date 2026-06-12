@@ -31,6 +31,10 @@ Build-configuration only; zero changes to any `.cc`/`.h` under test. Each is in 
 
 `is_debug=false`, `is_component_build=true`, `symbol_level=0`, `dcheck_always_on=true` (DCHECKs catch malformed tree updates in tests), `use_remoteexec=false`, `use_siso=false`, `use_aura=false` (keeps //ui/aura out of the accessibility component itself), `use_glib=true` (from sysroot, as on upstream CI), `ozone_auto_platforms=false`, `ozone_platform="headless"`, `ozone_platform_x11=false` (no display in container; prunes x11→remoting edge), `ax_t2_minimal=true` (see ledger #3). Everything else default.
 
-## Build
+## Build (completed 2026-06-12)
 
-(filled in after the build completes: timings, cone size, test results pointer)
+- Target: `ax_t2_unittests` (see ledger #3) — 5,179 ninja steps end to end on 4 cores, ~3.5 h wall including iteration; binary 1.6 MB (component build).
+- Two additional environment items surfaced during compilation, both documented:
+  7. `ui/gfx/native_ui_types.h`: 3-line `IS_LINUX` branch giving opaque-pointer stand-ins for NativeView/NativeWindow/NativeEvent (upstream has no Linux-without-aura branch; these plumbing types are never dereferenced in this configuration and are not accessibility code).
+  8. Data stand-ins: `third_party/test_fonts/*` zero-byte placeholders (runtime data for font-rendering tests we never run); `gpu/webgpu/DAWN_VERSION` written from the DEPS-pinned dawn revision (c1179de12ec3...); `enable_skia_graphite=false` added to args (prunes the dawn GPU backend from skia).
+- Result: ALL 7 T2 tests pass; upstream `AXEventGeneratorTest` baseline 87/87 passes in the same binary. Full event logs: results/T2-linux-generated-events.md. Test sources + BUILD patch + args preserved under tests/linux-t2/.
