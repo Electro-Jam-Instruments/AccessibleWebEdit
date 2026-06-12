@@ -17,7 +17,7 @@ So: **Phase 1** (SYSTEM, via Run Command) installs machine-wide prerequisites an
 
 Target: 16 vCPU, 64 GB RAM, 500+ GB SSD. A Chromium checkout plus build of the 149.0.7827.115 tag wants every bit of that.
 
-Recommended: **Windows Server 2022 Datacenter (Desktop Experience)** — UIA behaves identically to Windows 11 for our purposes (Windows Server 2019+ is a supported Claude Code platform), and the Azure licensing is simpler than Windows 11 client images, which require eligible per-user licensing. If you specifically want Windows 11 parity, use image `MicrosoftWindowsDesktop:windows-11:win11-24h2-pro:latest` instead and confirm license eligibility.
+Recommended: **Windows 11 Pro (24H2)**. End users run Windows 11, and the empirical evidence this project produces — Narrator behavior, UIA event ordering, Text pattern semantics — must come from the OS the claim is about. Windows 11 ships a newer Narrator and UIA client stack than Windows Server, so Server results would carry an asterisk. Licensing note: Windows 11 client images on Azure require eligible per-user licensing with multitenant hosting rights (Windows E3/E5, or Microsoft 365 E3/E5/F3); you accept this at deploy time with `--license-type Windows_Client`. Fallback only if licensing blocks you: `MicrosoftWindowsServer:WindowsServer:2022-datacenter-azure-edition:latest` (drop the license flag) — UIA provider-side behavior is equivalent, but re-validate any Narrator-observed results on real Windows 11 before citing them.
 
 ```bash
 RG=awe-blite
@@ -29,7 +29,8 @@ az group create -n $RG -l $LOC
 
 az vm create \
   -g $RG -n $VM \
-  --image MicrosoftWindowsServer:WindowsServer:2022-datacenter-azure-edition:latest \
+  --image MicrosoftWindowsDesktop:windows-11:win11-24h2-pro:latest \
+  --license-type Windows_Client \
   --size Standard_D16s_v5 \
   --os-disk-size-gb 512 \
   --storage-sku Premium_LRS \
