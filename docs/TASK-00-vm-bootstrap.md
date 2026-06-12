@@ -164,6 +164,13 @@ git config --global user.name  "AWE Build VM"
 git config --global user.email "awe-vm@electro-jam.com"
 Set-Content -Path "$env:USERPROFILE\.git-credentials" -Value "https://x-access-token:$pat@github.com" -NoNewline
 
+# NVDA screen reader: unattended install (verification layer -- see docs/TASK-00a-nvda-verification.md)
+$rel = Invoke-RestMethod "https://api.github.com/repos/nvaccess/nvda/releases/latest"
+$asset = $rel.assets | Where-Object { $_.name -match '^nvda_.*\.exe$' } | Select-Object -First 1
+Invoke-WebRequest $asset.browser_download_url -OutFile "$env:TEMP\nvda_installer.exe"
+& "$env:TEMP\nvda_installer.exe" --install-silent --enable-start-on-logon=False
+New-Item -ItemType Directory -Force -Path C:\awe\logs, C:\awe\nvda-config | Out-Null
+
 # Clone the planning repo
 $repo = "C:\src\AccessibleWebEdit"
 if (-not (Test-Path "$repo\.git")) {
@@ -201,6 +208,7 @@ In the RDP session after the one-time `claude auth login`:
 3. `git -C C:\src\AccessibleWebEdit pull` succeeds without prompting (PAT wired).
 4. `gclient --version` works in a fresh shell and `where python` resolves inside `C:\src\depot_tools` first.
 5. `echo %DEPOT_TOOLS_WIN_TOOLCHAIN%` prints `0` (use Google-internal toolchain off; local VS Build Tools at `C:\BuildTools` via `vs2022_install`).
+6. `"%ProgramFiles%\nvda\nvda.exe" --check-running` then launch with the project profile per docs/TASK-00a-nvda-verification.md; `%TEMP%\nvda.log` exists after first start. Narrator is NOT used in this project.
 
 ## First work order for the VM session
 

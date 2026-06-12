@@ -14,6 +14,8 @@ Date: 2026-06-12. Consolidated from the Linux generated-event runs (results/T2-l
 
 ## Windows VM verification queue (TASK-00 blocked items)
 
+Note (2026-06-12): AT-level verification uses **NVDA speech logs**, not Narrator (planning decision; install/log mechanics researched and documented in docs/TASK-00a-nvda-verification.md). All "Narrator-observable" items below resolve to NVDA-observable via `--log-level=12` speech logging.
+
 5. **UIA finalize end-to-end:** rerun T2-1/2/3/5 shapes under `ax_dump_events` on Windows; confirm UIA_Text_TextChanged / TextSelectionChanged emission and Text-pattern gating (browser_accessibility_manager_win.cc:1300-1314), including question #2 above.
 6. **T2-4 composition:** OnActiveComposition → GetActiveComposition/GetConversionTarget round-trip and which UIA events accompany commit. Note found during grading: committed compositions deliberately defer to the standard text-changed path (ax_platform_node_win.cc:836-848) — verify no double announcement.
 7. **T2-6 action coverage** (PdfAXActionTarget mirror) and **T2-7 cell-vs-text selection handoff** — both Windows-only by nature.
