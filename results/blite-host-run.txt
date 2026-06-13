@@ -1,0 +1,28 @@
+=== B-lite host (Linux lean spine) ===
+pipeline: MockCanvasEditor -> Bridge -> AXTree -> AXEventGenerator
+(platform-node/UIA layer intentionally not linked here; VM work)
+
+initial surface text: "hello" caret=5
+
+--- accessibility tree (role / name / selection) ---
+  node 1  role=rootWebArea  name=""
+  node 2  role=textField  name=""  [editable]
+  node 3  role=staticText  name="hello"
+  tree-data selection: focus_object=3 offset=5
+
+after InsertText("!"): "hello!" caret=6
+
+--- generated events [keystroke] ---
+  documentSelectionChanged on node 1
+  editableTextChanged on node 2
+  textSelectionChanged on node 2
+  valueInTextFieldChanged on node 2
+  nameChanged on node 3
+
+--- accessibility tree (role / name / selection) ---
+  node 1  role=rootWebArea  name=""
+  node 2  role=textField  name=""  [editable]
+  node 3  role=staticText  name="hello!"
+  tree-data selection: focus_object=3 offset=6
+
+=== B-lite lean spine ran: surface -> bridge -> AXTree -> AXEventGenerator OK ===

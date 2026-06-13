@@ -1,0 +1,9 @@
+# Root scope for the Linux B-lite work: the generated-event tests and the
+# B-lite host spine executable.
+group("t2") {
+  testonly = true
+  deps = [
+    "//ui/accessibility:ax_t2_unittests",
+    "//ui/accessibility/blite:blite_host",
+  ]
+}

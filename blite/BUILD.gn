@@ -1,0 +1,11 @@
+# B-lite host (spine) executable. See blite_host.cc.
+import("//testing/test.gni")
+
+executable("blite_host") {
+  testonly = true
+  sources = [ "blite_host.cc" ]
+  deps = [
+    "//base",
+    "//ui/accessibility:accessibility_internal",
+  ]
+}
