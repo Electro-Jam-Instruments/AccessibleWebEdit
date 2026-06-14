@@ -51,7 +51,7 @@ Realistic shape: shared core + Windows shell = first milestone (the visual/inter
 
 ## Open decisions for planning
 
-1. Strategy (A) vs (B) — gated mostly by binary-size/dependency tolerance and how much of `ui/base/ime` we want to inherit vs own.
+1. Strategy (A) vs (B) — gated mostly by binary-size/dependency tolerance and how much of `ui/base/ime` we want to inherit vs own. How the web-facing APIs (AOM/EditContext/ariaNotify) relate and whether a web build is also in scope: docs/13-chrome-api-and-aom-fit.md.
 2. Layout engine: adopt `SkParagraph` as-is, or a custom layout on HarfBuzz for finer control over the a11y geometry coupling?
 3. IME depth per platform — minimum viable (commit-only) vs full composition fidelity (ties to T2-4 verification on the VM). Full IME deep dive and per-platform contract table: docs/12-ime-support.md.
 4. How much of Chromium's `gpu`/`viz`/Ozone surface stack to pull vs a thin per-platform GL/Metal context + Skia backend.
