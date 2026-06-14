@@ -383,5 +383,91 @@ TEST(AXMatrixT2Test, ExpandCollapse_And_PosInSet) {
                   AXEventGenerator::Event::POSITION_IN_SET_CHANGED, 7)));
 }
 
+// docs/10 "comments/annotations": anchoring a comment to a node is a
+// kDetailsIds relation; adding it fires DETAILS_CHANGED on the anchored node.
+// This is how a comment-on-a-cell / comment-on-a-range is expressed.
+TEST(AXMatrixT2Test, Comment_DetailsRelation) {
+  AXTreeUpdate initial = BuildTableTree();
+  initial.nodes.resize(6);
+  initial.nodes[4].child_ids = {7};   // cell(5) -> comment(7)
+  initial.nodes[5].id = 7;
+  initial.nodes[5].role = ax::mojom::Role::kComment;
+  AXTree tree(initial);
+  AXEventGenerator generator(&tree);
+
+  // Anchor the comment to the cell via a details relation.
+  AXTreeUpdate update;
+  update.nodes.resize(1);
+  update.nodes[0] = tree.GetFromId(5)->data();
+  update.nodes[0].AddIntListAttribute(ax::mojom::IntListAttribute::kDetailsIds,
+                                      {7});
+  ASSERT_TRUE(tree.Unserialize(update)) << tree.error();
+  LogEvents("matrix comment details relation added", generator);
+  EXPECT_THAT(generator, Contains(IsEventAtNode(
+                             AXEventGenerator::Event::DETAILS_CHANGED, 5)));
+}
+
+// docs/10 "collaboration presence" / status announcements: a live region.
+// A root carrying kLiveStatus with descendants carrying kContainerLiveStatus
+// fires LIVE_REGION_CHANGED on the root and LIVE_REGION_NODE_CHANGED on the
+// changed descendant. This is the AX-tree equivalent of the web ariaNotify /
+// aria-live path (docs/13) for announcing things with no structural change.
+TEST(AXMatrixT2Test, LiveRegion_Announcement) {
+  AXTreeUpdate initial;
+  initial.has_tree_data = true;
+  initial.root_id = 1;
+  initial.nodes.resize(3);
+  initial.nodes[0].id = 1;
+  initial.nodes[0].role = ax::mojom::Role::kRootWebArea;
+  initial.nodes[0].child_ids = {2};
+  initial.nodes[1].id = 2;  // live region root
+  initial.nodes[1].role = ax::mojom::Role::kStatus;
+  initial.nodes[1].AddStringAttribute(ax::mojom::StringAttribute::kLiveStatus,
+                                      "polite");
+  initial.nodes[1].AddStringAttribute(
+      ax::mojom::StringAttribute::kContainerLiveStatus, "polite");
+  initial.nodes[1].child_ids = {3};
+  initial.nodes[2].id = 3;  // changing descendant
+  initial.nodes[2].role = ax::mojom::Role::kStaticText;
+  initial.nodes[2].AddStringAttribute(
+      ax::mojom::StringAttribute::kContainerLiveStatus, "polite");
+  initial.nodes[2].SetName("Alice is editing");
+  AXTree tree(initial);
+  AXEventGenerator generator(&tree);
+
+  AXTreeUpdate update;
+  update.nodes.resize(1);
+  update.nodes[0] = tree.GetFromId(3)->data();
+  update.nodes[0].SetName("Bob is editing");
+  ASSERT_TRUE(tree.Unserialize(update)) << tree.error();
+  LogEvents("matrix live region announcement", generator);
+  EXPECT_THAT(generator, Contains(IsEventAtNode(
+                             AXEventGenerator::Event::LIVE_REGION_CHANGED, 2)));
+  EXPECT_THAT(generator,
+              Contains(IsEventAtNode(
+                  AXEventGenerator::Event::LIVE_REGION_NODE_CHANGED, 3)));
+}
+
+// docs/10 "reorder rows/columns": reordering a container's child_ids (without
+// adding or removing children) fires CHILDREN_CHANGED on the container.
+TEST(AXMatrixT2Test, Table_RowReorder) {
+  AXTreeUpdate initial = BuildTableTree();
+  initial.nodes.resize(6);
+  initial.nodes[1].child_ids = {3, 6};  // table(2) -> row(3), row(6)
+  initial.nodes[5].id = 6;
+  initial.nodes[5].role = ax::mojom::Role::kRow;
+  AXTree tree(initial);
+  AXEventGenerator generator(&tree);
+
+  AXTreeUpdate update;
+  update.nodes.resize(1);
+  update.nodes[0] = tree.GetFromId(2)->data();
+  update.nodes[0].child_ids = {6, 3};  // swap the two rows
+  ASSERT_TRUE(tree.Unserialize(update)) << tree.error();
+  LogEvents("matrix row reorder", generator);
+  EXPECT_THAT(generator, Contains(IsEventAtNode(
+                             AXEventGenerator::Event::CHILDREN_CHANGED, 2)));
+}
+
 }  // namespace
 }  // namespace ui

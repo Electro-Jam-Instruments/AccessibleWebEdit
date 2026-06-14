@@ -49,3 +49,16 @@ Also note for the marker row: marker events target the **field ancestor**, consi
 out/rel/ax_t2_unittests --gtest_filter='AXMatrixT2Test.*' --single-process-tests
 out/rel/ax_t2_unittests    # full 104-test suite
 ```
+
+
+## Extension 2026-06-14: comments, live regions, row reorder (3 more rows)
+
+Three additional docs/10 rows verified by test (full suite now 107 tests, all pass):
+
+| Row | Result | Event log |
+|---|---|---|
+| Comments/annotations anchored via relation | **PASS** | `kDetailsIds` add -> `detailsChanged` on the anchored node (node 5) — this is how comment-on-cell / comment-on-range is expressed |
+| Collaboration presence / status (live region) | **PASS** | live root (`kLiveStatus`) + descendant (`kContainerLiveStatus`) name change -> `liveRegionChanged` on the root (node 2) + `liveRegionNodeChanged` on the changed node (node 3). AX-tree equivalent of web `ariaNotify`/aria-live (docs/13) for announcing changes with no structural delta |
+| Reorder rows/columns | **PASS** | child_ids reorder (no add/remove) -> `childrenChanged` on the container (node 2) |
+
+These close the comments/annotations and collaboration-presence-announcement rows at the generation layer. The remaining OPEN items (remote-cursor schema, edit-origin) are genuine schema gaps with no generation-layer test possible — they are recorded in NEXT-QUESTIONS #3/#4 and docs/03 §7.
