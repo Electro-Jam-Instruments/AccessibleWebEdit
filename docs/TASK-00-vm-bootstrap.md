@@ -47,7 +47,9 @@ az network nsg rule create -g $RG --nsg-name ${VM}NSG -n AllowRdpFromMe \
 
 Notes:
 
-- `Standard_D16s_v5` = 16 vCPU / 64 GB. `D16ds_v5` adds a fast temp disk if you want the build's intermediate output off the OS disk.
+- **Run provisioning from your own machine, not a Claude Code cloud session.** The Azure management plane (`management.azure.com`) is firewalled out of the cloud sandbox (verified 2026-06-15: egress returns `host_not_allowed`), so the `az` CLI cannot reach ARM from there even if installed. A ready-to-paste version of the commands above — with auto public-IP detection for the RDP rule and a SKU switch — is in `scripts/provision-vm.sh` (`az login`, `export ADMIN_PASSWORD=…`, then run it).
+- `Standard_D16s_v5` = 16 vCPU / 64 GB (baseline). For ~2x faster builds use **`Standard_D32s_v5`** = 32 vCPU / 128 GB (this is where you'd "get" 128 GB RAM; RAM is not the constraint, cores are). `D16ds_v5`/`D32ds_v5` add a fast temp disk if you want build intermediates off the OS disk.
+- **Disk is the binding constraint, not RAM.** The OS disk holds a ~100–120 GB `gclient` checkout plus build output; 256 GB is the floor, **512 GB is safe** (set above). 128 GB is too small for a canonical checkout+build. 64 GB RAM is the comfortable sweet spot; no GPU SKU is needed (UIA/NVDA/ax_dump are not GPU-dependent).
 - The VM must stay running with the user logged on for UIA work and for Remote Control (the local `claude` process must keep running; an extended network outage of ~10 minutes ends the session and the autostart task re-arms it at next logon/restart).
 - Auto-logon stores the password in the registry. Acceptable for a disposable research VM behind a locked-down NSG; do not reuse a password you care about.
 
