@@ -24,7 +24,7 @@ Note (2026-06-12): AT-level verification uses **NVDA speech logs**, not Narrator
 
 ## docs/10 grading fallout — scoping decisions
 
-8. **BROWSER-WORK shortlist for overlay patches** (all verified small): SelectionPattern2 (ISelectionProvider2 — zero hits in UIA layer); UIA notification for TEXT_ATTRIBUTE_CHANGED (currently IA2-only, browser_accessibility_manager_win.cc:681-683); ITextProvider2/RangeFromAnnotation (TextPattern2 in the not-implemented list — corrects docs/10's seeded assumption); IAnnotationProvider get_Author/get_DateTime (empty stubs). Decide which 1-2 to prototype first as the standards exhibit.
+8. **BROWSER-WORK shortlist for overlay patches** — all four now written as concrete prototype diffs with measured sizes in patches/ (see patches/README.md): SelectionPattern2 (~84 lines), ITextProvider2/RangeFromAnnotation (~64), TEXT_ATTRIBUTE_CHANGED UIA event (~2), IAnnotationProvider author/datetime (~8, +schema). Total ~160 lines / 6 files. Build + test on the VM; recommended first two: SelectionPattern2 and annotation author/datetime.
 9. **Column hide:** no schema distinguishes hidden from deleted columns and no count event fires on Windows (ROW_COUNT_CHANGED is in the unused-events block). Tree-design question for the canvas producer.
 10. **Filter state:** no AX/UIA vocabulary for "N of M rows visible." Decide: ItemStatus free-text, live region, or schema proposal.
 

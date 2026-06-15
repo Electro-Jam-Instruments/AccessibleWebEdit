@@ -1,0 +1,46 @@
+# 00 — Index
+
+AccessibleWebEdit: proving a custom (non-Blink) canvas editor can feed Chromium's `ui/accessibility` layer directly and get full editing semantics through a real screen reader, bypassing ARIA. Build path is **B-lite**: a standalone host using `ui/accessibility` + `AXPlatformNodeDelegate`, pinned to Chrome 149 stable (tag 149.0.7827.115).
+
+This index orients a new reader (or a fresh session). Start here.
+
+## Where the project stands (2026-06-15)
+
+- **Foundation PROVEN on Linux:** the generated-event engine that drives all editing semantics is tested — **107 passing tests** (`tests/linux-t2/`), plus a runnable B-lite spine (`blite/`).
+- **Options SETTLED:** native is the only path to *real* editing fidelity; the web path is permanently capped (AOM virtual nodes dead) — see doc 13.
+- **Critical path = the Windows VM (TASK-00):** everything screen-reader-observable (UIA finalize, IME, actions, NVDA) is written and queued but blocked on VM provisioning (your Azure step).
+
+## Docs
+
+| Doc | What it is |
+|---|---|
+| **03-bridge-contract.md** | The producer → `ui/accessibility` API contract. Every clause tagged PROVEN/SOURCE/VM. The spec to *build* real editing against. |
+| **09-child-tree-editing-research.md** | Tier-1 source findings: can a non-Blink producer carry full editing semantics? (Yes.) Defines the T2 task list. |
+| **10-editing-scenario-matrix.md** | Every editor interaction (text/tables/comments/collaboration/embedded) graded SUPPORTED / BROWSER-WORK / OPEN with file:line citations; 15 rows verified by test. |
+| **11-cross-platform-rendering.md** | What it takes to build the sighted-facing rendering UI across Win/Mac/Linux/mobile. ~80% shared core + thin per-platform shell; IME is the hard part. |
+| **12-ime-support.md** | Why IME is mandatory for a custom surface, the per-platform contract, and the accessibility tie-in. |
+| **13-chrome-api-and-aom-fit.md** | How the web APIs (AOM, EditContext, ariaNotify, HTML-in-Canvas) relate to the native approach. Native vs web vs standards-play. |
+| **TASK-00-vm-bootstrap.md** | Provision + bootstrap the Windows 11 VM (the critical-path dependency). |
+| **TASK-00a-nvda-verification.md** | NVDA (not Narrator) as the AT verification layer, via speech logs. |
+
+## Results & evidence
+
+| Path | What it is |
+|---|---|
+| results/T2-linux-generated-events.md | T2-1/2/3/5 event logs, all pass. |
+| results/matrix-linux-generated-events.md | docs/10 rows verified by test (T2-7 gen half, comments, live regions, tables, etc.). |
+| results/ENVIRONMENT.md | Full build provenance + the local-modifications ledger (how the pinned source was built lean). |
+| results/NEXT-QUESTIONS.md | The consolidated decision/verification queue for the planning session + VM. |
+| results/blite-host-run.txt | Captured run of the B-lite spine. |
+
+## Code & patches
+
+| Path | What it is |
+|---|---|
+| blite/ | The runnable B-lite lean spine (surface → bridge → AXTree → AXEventGenerator) + README. |
+| tests/linux-t2/ | The T2 + matrix generated-event tests, the BUILD patch, and args — reproducible against the pinned tag (and registered in the canonical `accessibility_unittests` for the VM). |
+| patches/ | Four BROWSER-WORK prototype patches (SelectionPattern2, ITextProvider2/RangeFromAnnotation, TEXT_ATTRIBUTE_CHANGED UIA event, annotation author/datetime) — the standards exhibits. Build on the VM. |
+
+## The one decision that unblocks everything
+
+Provision the TASK-00 Windows VM (and confirm the Win11 Azure licensing attestation). Once it exists, the queued work runs without further design: rebuild the tests under the canonical target, run them under `ax_dump_events` + NVDA, do T2-4/6/7, and build/measure the four prototype patches.
