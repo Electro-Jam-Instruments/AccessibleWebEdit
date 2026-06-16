@@ -67,6 +67,24 @@ C:\awe\logs\nvda-run.log   ←── read/asserted by the Claude session, commit
 
 Scenario driving: focus the host window and inject input via PowerShell SendKeys / `keybd_event` (caret moves, typing) or via UIA client actions (ITextRangeProvider::Select etc., exercising T2-6's action channel); after each step the log yields what an NVDA user would have heard. `ax_dump_events` runs alongside for the Chromium-side event record — log + dump together give the full causal chain: tree delta → generated event → UIA event → announcement.
 
+## Headless / dev-mode operation (verified 2026-06-16, nvaccess/nvda repo)
+
+**Important caveat: NVDA is not *truly* headless.** It is a GUI screen reader and requires an interactive desktop session — it cannot run in Windows session 0 or with no desktop. The TASK-00 auto-logon (interactive user session) is exactly what makes NVDA usable; "headless" in this project means **no audio, no human watcher, output captured as data** — not "no desktop." Do not expect NVDA to run as a pure background service.
+
+Two ways to capture what NVDA would speak, in increasing robustness:
+
+### Strategy A — Log-driven (default; lowest setup, what the rest of this doc describes)
+Install the release binary, run `nvda.exe -m -c <config> --log-level=12 --log-file=<path>` with the **No speech** synth, and parse the log for spoken output. Pros: trivial setup, uses the shipping build. Cons: the `Speaking [...]` log format is an implementation detail (Open item #1) — regex-fragile across NVDA versions. Use this for the first VM session and the initial T2 announcement captures.
+
+### Strategy B — SystemTestSpy + Robot Framework (robust, programmatic; NVDA's own mechanism)
+NVDA's source tree (`tests/system/`, run via `runsystemtests.bat`, Robot Framework) drives a **`SystemTestSpy`** global plugin that captures NVDA's spoken/braille output as **structured data**, asserted directly in tests — no log-parsing. This runs against a **source copy of NVDA** (developer build: clone nvaccess/nvda, `scons`, `runnvda.bat`), not the installed binary. Pros: version-stable, CI-grade, captures the exact speech sequence as objects; this is how NVDA verifies its own announcements. Cons: requires building NVDA from source (Python + scons) on the VM — heavier than Strategy A. Graduate to this if/when we want a durable automated regression suite for the editing scenarios, or if Strategy A's log-parsing proves fragile.
+
+### Driving NVDA (not capturing): Controller Client API
+`nvdaControllerClient.dll` (API v2.0 in NVDA 2024.1: `nvdaController_speakText`, `speakSsml`, `getProcessId`) lets an external program *make NVDA speak* arbitrary text/braille. This is the inverse of what we need (we capture NVDA's UIA-derived announcements, not feed it text), so it is **not** our verification path — but it is handy as a one-call sanity check that the speech pipeline + synth are alive on the VM before a run.
+
+### Recommendation
+First VM session: **Strategy A** (binary + log, fastest to first result). If the editing-scenario captures become a maintained regression suite, move to **Strategy B** (source build + SystemTestSpy) for stability. Both rely on the interactive desktop session from TASK-00; neither needs audio (No speech synth) or a GPU.
+
 ## What changes in the existing plan
 
 - Every "Narrator-observable" phrase in docs/09, results/ENVIRONMENT.md, and NEXT-QUESTIONS now reads as "NVDA-observable via speech log". The verification is *stronger*, not weaker: logged utterances are diffable evidence; Narrator listening sessions were never going to be.
@@ -75,6 +93,6 @@ Scenario driving: focus the host window and inject input via PowerShell SendKeys
 
 ## Open items for the first VM session
 
-1. Confirm the exact `Speaking` line format of the installed NVDA version at level 12 (it is an implementation detail, not API) and pin a parse regex in the test driver.
+1. Confirm the exact `Speaking` line format of the installed NVDA version at level 12 (it is an implementation detail, not API) and pin a parse regex in the test driver — or skip log-parsing entirely by using Strategy B (SystemTestSpy) if a durable suite is wanted.
 2. Decide focus-mode vs browse-mode handling for the B-lite host window (NVDA treats Win32 apps in focus mode by default — likely the right behavior for an editor; verify).
 3. Check NVDA's UIA event coalescing under rapid edits (relates to T2-5/T2-7 timing questions).
