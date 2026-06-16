@@ -55,6 +55,26 @@ Notes:
 - The VM must stay running with the user logged on for UIA work and for Remote Control (the local `claude` process must keep running; an extended network outage of ~10 minutes ends the session and the autostart task re-arms it at next logon/restart).
 - Auto-logon stores the password in the registry. Acceptable for a disposable research VM behind a locked-down NSG; do not reuse a password you care about.
 
+## Cost & usage patterns (read before leaving it running)
+
+Approximate US pay-as-you-go figures (verify on the Azure pricing calculator; these are estimates, not a live pull). Three components:
+
+- **Compute** — billed per-hour *only while the VM is running*; deallocating (stopping) it halts this charge. `D16s_v5` ≈ **$0.77/hr with Azure Hybrid Benefit** (your own Windows license, which the licensing note above already assumes) or ≈ **$1.50/hr** at full Windows PAYG. `D32s_v5` ≈ double.
+- **Disk** — 512 GB Premium SSD ≈ **$73/mo, billed continuously as long as the disk exists**, even when the VM is deallocated. The sneaky always-on charge.
+- **Public IP** ≈ **$4/mo**. Egress is negligible (the gclient download is inbound = free).
+
+| Usage pattern | Approx. cost (with Hybrid Benefit) |
+|---|---|
+| **Burst then delete** — ~2 weeks, ~8h/day active (~110 hrs), then delete the RG | **≈ $160 one-time, then $0** (~$240 without Hybrid Benefit) |
+| **Keep but deallocate when idle** | ~$77/mo baseline (disk + IP) + compute only when running |
+| **24/7 (avoid)** | `D16s_v5` ≈ **$640/mo (~$7,700/yr)**; full Windows PAYG ≈ **$1,170/mo**; `D32s_v5` doubles compute |
+
+**The trap:** the "VM must stay running for Remote Control" requirement (architecture section) pushes toward 24/7 = the $600–1,200/mo scenario. That always-on need only applies if you want the VM continuously reachable from elsewhere. For build/test bursts, RDP in, run, then **deallocate** — or **delete the resource group** when done (→ $0; note you must delete the *disk* too, not just stop the VM, to stop the $73/mo).
+
+**Cost levers:** auto-shutdown schedule / deallocate when idle; **Azure Hybrid Benefit** (your Windows license → ~half the compute); **Spot VMs** (a build tolerates interruption → often 60–80% off compute); delete the disk to reach true $0.
+
+**Cheaper still:** if you have a capable local Win11 box, docs/TASK-00b skips Azure entirely → **$0** and avoids all of the above. Use this Azure path only when a local box isn't available or you need the VM always-reachable.
+
 ## Running the bootstrap
 
 Save the script below as `bootstrap.ps1`, then:
