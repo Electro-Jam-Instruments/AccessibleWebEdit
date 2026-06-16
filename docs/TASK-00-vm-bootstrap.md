@@ -2,6 +2,8 @@
 
 Status: ready to execute. This is the provisioning guide and bootstrap script that creates the Windows environment for Tier 2 tasks T2-1 through T2-7 (section 09).
 
+> **Have a capable local Windows 11 machine?** Skip Azure and build/test locally instead — simpler, free, and zero-deviation. See docs/TASK-00b-local-windows-setup.md. Use this Azure path only if you do not have a local Win11 box with ~512 GB free.
+
 Claude Code install and Remote Control facts below were verified against the official docs (code.claude.com/docs, retrieved 2026-06-12): native Windows install is `irm https://claude.ai/install.ps1 | iex`; Remote Control needs Claude Code v2.1.51+ and a **full-scope claude.ai OAuth login** — API keys and `claude setup-token` / `CLAUDE_CODE_OAUTH_TOKEN` tokens are inference-only and are rejected for Remote Control. That constraint forces the two-phase design described next.
 
 ## Architecture of the bootstrap (read first)

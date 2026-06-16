@@ -20,7 +20,8 @@ This index orients a new reader (or a fresh session). Start here.
 | **11-cross-platform-rendering.md** | What it takes to build the sighted-facing rendering UI across Win/Mac/Linux/mobile. ~80% shared core + thin per-platform shell; IME is the hard part. |
 | **12-ime-support.md** | Why IME is mandatory for a custom surface, the per-platform contract, and the accessibility tie-in. |
 | **13-chrome-api-and-aom-fit.md** | How the web APIs (AOM, EditContext, ariaNotify, HTML-in-Canvas) relate to the native approach. Native vs web vs standards-play. |
-| **TASK-00-vm-bootstrap.md** | Provision + bootstrap the Windows 11 VM (the critical-path dependency). |
+| **TASK-00-vm-bootstrap.md** | Provision + bootstrap the Windows 11 VM (cloud path). |
+| **TASK-00b-local-windows-setup.md** | If you have a capable local Win11 box (e.g. Minisforum MS-01): skip Azure, build/test locally. Simpler + free. Recommended when available. |
 | **TASK-00a-nvda-verification.md** | NVDA (not Narrator) as the AT verification layer, via speech logs. |
 
 ## Results & evidence
