@@ -33,6 +33,7 @@ This index orients a new reader (or a fresh session). Start here.
 | results/ENVIRONMENT.md | Full build provenance + the local-modifications ledger (how the pinned source was built lean). |
 | results/NEXT-QUESTIONS.md | The consolidated decision/verification queue for the planning session + VM. |
 | results/blite-host-run.txt | Captured run of the B-lite spine. |
+| results/expert-reviews/AGGREGATE.md | Three independent expert reviews (Chromium internals / AT interop / standards) + rated aggregate. Surfaces ~7 concrete fixes and a harder verification bar. |
 
 ## Code & patches
 
