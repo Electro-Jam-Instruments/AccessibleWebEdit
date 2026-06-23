@@ -16,27 +16,24 @@ Contrast: `EDITABLE_TEXT_CHANGED` and `DOCUMENT_SELECTION_CHANGED` are enqueued 
 
 | Change | Lines |
 |---|---|
-| browser_accessibility_manager_win.cc: enqueue node into `text_changed_nodes_` in the TEXT_ATTRIBUTE_CHANGED case | 1–2 |
+| browser_accessibility_manager_win.cc: call `EnqueueTextChangedEvent(*wrapper)` in the TEXT_ATTRIBUTE_CHANGED case | 1–2 |
 | **Total** | **~2 lines, 1 file** |
 
 ## Diff (minimum-viable)
+
+> **Correction (expert review 2026-06-16):** an earlier draft of this patch did `text_changed_nodes_.insert(wrapper)` with a *raw* leaf wrapper. That is wrong: the real code never inserts a raw wrapper — `EnqueueTextChangedEvent` (browser_accessibility_manager_win.cc:1229-1234) inserts `GetUiaTextPatternProvider(node)`, resolving to a node that actually supports `UIA_TextPatternId`. Because `FinalizeAccessibilityEvents` fires `UIA_Text_TextChangedEventId` **unconditionally** on the set (no Text-pattern guard, unlike the selection set), a raw leaf insert risks firing on a node with no Text pattern. Use the existing helper, mirroring the EDITABLE_TEXT_CHANGED case (line 476):
 
 ```diff
      case AXEventGenerator::Event::TEXT_ATTRIBUTE_CHANGED:
        FireWinAccessibilityEvent(IA2_EVENT_TEXT_ATTRIBUTE_CHANGED, wrapper);
 +      // Also notify UIA clients: an attribute change is a text-pattern change.
-+      // Finalize fires UIA_Text_TextChangedEventId for queued nodes that
-+      // support the Text pattern (see FinalizeAccessibilityEvents).
-+      text_changed_nodes_.insert(wrapper);
++      // EnqueueTextChangedEvent resolves to the UIA Text-pattern provider, so
++      // finalize fires UIA_Text_TextChangedEventId on a node that supports it.
++      EnqueueTextChangedEvent(*wrapper);
        break;
 ```
 
-`FinalizeAccessibilityEvents` (browser_accessibility_manager_win.cc:1311-1314) already does:
-```cpp
-for (BrowserAccessibility* event_node : text_changed_nodes_)
-  FireUiaAccessibilityEvent(UIA_Text_TextChangedEventId, event_node);
-```
-so the queued node gets a real UIA event with no other change.
+`FinalizeAccessibilityEvents` (browser_accessibility_manager_win.cc:1311-1314) then fires `FireUiaAccessibilityEvent(UIA_Text_TextChangedEventId, ...)` over the queued (Text-pattern-resolved) nodes — no other change needed.
 
 ## Notes / richer alternative
 

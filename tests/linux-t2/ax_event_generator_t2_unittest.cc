@@ -184,6 +184,52 @@ TEST(AXEventGeneratorT2Test, T2_2_NoTextFieldAncestor) {
   }
 }
 
+// T2-2b (isolation, added 2026-06-16 per expert review): drop the text-field
+// ROLE but KEEP State::kEditable on the container. If the gate is the role,
+// editing events must still vanish. Confirms it is NOT kEditable that gates.
+TEST(AXEventGeneratorT2Test, T2_2b_RoleDroppedKeepsEditableSuppresses) {
+  AXTreeUpdate initial = BuildTextFieldTree(/*editable=*/true, "hello");
+  initial.nodes[1].role = ax::mojom::Role::kGenericContainer;  // drop the role
+  // node 2 retains State::kEditable from the editable=true build.
+  AXTree tree(initial);
+  AXEventGenerator generator(&tree);
+
+  AXTreeUpdate update;
+  update.nodes.resize(1);
+  update.nodes[0] = tree.GetFromId(3)->data();
+  update.nodes[0].SetName("hellox");
+  ASSERT_TRUE(tree.Unserialize(update)) << tree.error();
+
+  LogEvents("T2-2b role dropped, kEditable kept", generator);
+  for (const AXEventGenerator::TargetedEvent& event : generator) {
+    EXPECT_NE(event.event_params->event,
+              AXEventGenerator::Event::EDITABLE_TEXT_CHANGED);
+    EXPECT_NE(event.event_params->event,
+              AXEventGenerator::Event::VALUE_IN_TEXT_FIELD_CHANGED);
+  }
+}
+
+// T2-2c (isolation): KEEP the text-field role (kTextField) but DROP
+// State::kEditable. If GetTextFieldAncestor/IsTextField is role-only (expert
+// claim), editing events must STILL fire. This isolates the gate as the role.
+TEST(AXEventGeneratorT2Test, T2_2c_RoleKeptNoEditableStillFires) {
+  AXTreeUpdate initial = BuildTextFieldTree(/*editable=*/true, "hello");
+  initial.nodes[1].RemoveState(ax::mojom::State::kEditable);  // keep role, drop state
+  AXTree tree(initial);
+  AXEventGenerator generator(&tree);
+
+  AXTreeUpdate update;
+  update.nodes.resize(1);
+  update.nodes[0] = tree.GetFromId(3)->data();
+  update.nodes[0].SetName("hellox");
+  ASSERT_TRUE(tree.Unserialize(update)) << tree.error();
+
+  LogEvents("T2-2c role kept (kTextField), kEditable dropped", generator);
+  EXPECT_THAT(generator,
+              Contains(IsEventAtNode(
+                  AXEventGenerator::Event::EDITABLE_TEXT_CHANGED, 2)));
+}
+
 // T2-3: caret and selection driven purely through AXTreeData sel_ fields.
 // Each delta shape must produce DOCUMENT_SELECTION_CHANGED at the root and
 // TEXT_SELECTION_CHANGED on the text field containing the selection focus.

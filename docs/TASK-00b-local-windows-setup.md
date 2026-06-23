@@ -47,7 +47,7 @@ Then the VM-queue items (NEXT-QUESTIONS #5–7) run here: register the preserved
 ## What runs where
 
 - **This local box:** the full Windows verification queue — UIA finalize (T2-1/2/3/5 under `ax_dump_events`), IME composition (T2-4), action round-trip (T2-6), cell↔text selection UIA ordering (T2-7), NVDA end-to-end announcements, and the four prototype patches.
-- **The existing Linux work** (107 generated-event tests, blite spine) stays as-is; this box adds the platform/UIA half on top, against the same pinned tag.
+- **The existing Linux work** (109 generated-event tests, blite spine) stays as-is; this box adds the platform/UIA half on top, against the same pinned tag.
 
 ## Notes
 

@@ -7,11 +7,13 @@ All four are in `#if BUILDFLAG(IS_WIN)` code, so they **build and test on the TA
 | Patch | Gap closed | Size | Touches schema? |
 |---|---|---|---|
 | selectionprovider2-prototype.md | `ISelectionProvider2` (FirstSelected/LastSelected/Current/ItemCount — Narrator N-of-M summaries) | ~84 lines, 2 files | no |
-| itextprovider2-rangefromannotation-prototype.md | `ITextProvider2::RangeFromAnnotation` (navigate comment → annotated text range) + GetCaretRange | ~64 lines, 3 files | no |
+| itextprovider2-rangefromannotation-prototype.md | `ITextProvider2::RangeFromAnnotation` (navigate comment → annotated text range) + GetCaretRange | ~64 lines (optimistic — **sketch with placeholder bodies + 2 API corrections**, see its header), 3 files | no |
 | text-attribute-changed-uia-prototype.md | UIA event for `TEXT_ATTRIBUTE_CHANGED` (formatting changes currently IA2-only) | ~2 lines, 1 file | no |
 | annotation-author-datetime-prototype.md | `IAnnotationProvider::get_Author`/`get_DateTime` (empty stubs → real values) | ~8 lines, 2 files | **yes** (2 new StringAttributes) |
 
 Total surface to close all four: roughly **160 lines across 6 files**, only one of which touches the cross-platform schema. That small total is itself the exhibit.
+
+> **Expert review 2026-06-16 — corrections applied:** the `text-attribute-changed` patch now uses `EnqueueTextChangedEvent(*wrapper)` (an earlier draft used a wrong raw `text_changed_nodes_.insert`); the `ITextProvider2` patch is explicitly labeled a sketch with two API corrections (real factory is `CreateIUnknown`, not `PatternProvider<>`; canonical gating predicate); the `SelectionProvider2` patch dropped a dead empty-namespace block. `SelectionProvider2` and `annotation author/datetime` were confirmed API-accurate. One reviewer flag — that the patches cite a stale `content/...` path — did **not** hold: they cite the bare filename, which resolves to `ui/accessibility/platform/` at tag 149.
 
 Recommended order to prototype on the VM (per NEXT-QUESTIONS #8 — pick 1-2 first):
 1. **SelectionPattern2** — biggest user-visible win (multi-cell selection summaries), no schema change, cleanest demo against NVDA.

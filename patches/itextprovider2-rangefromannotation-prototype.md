@@ -9,6 +9,12 @@ Date: 2026-06-15. Against Chromium tag 149.0.7827.115. BROWSER-WORK item from re
 
 Consequence: an AT can find a comment's text *attributes* (forward direction works) but cannot navigate **from a comment annotation element back to the text range it annotates** — `ITextProvider2::RangeFromAnnotation`. The forward data already exists: a comment is the target of some node's `kDetailsIds`, and `IAnnotationProvider::get_Target` (ax_platform_node_win.cc:2691) already resolves that reverse relation.
 
+> **Status & corrections (expert review 2026-06-16): this is a SKETCH, not an applyable diff** — the method bodies below contain `/* ... */` placeholders for range construction and `IRawElementProviderSimple*`→node resolution, so the ~64-line estimate is optimistic. Two API errors to fix before implementing on the VM:
+> 1. **Pattern factory:** the Text pattern is *not* exposed via `PatternProvider<ITextProvider>`. The real factory is `AXPlatformNodeTextProviderWin::CreateIUnknown` (ax_platform_node_win.cc:8700). `ITextProvider2` should be reached by `QueryInterface` on the object that factory already returns (add `ITextProvider2` to `AXPlatformNodeTextProviderWin`'s COM map + inheritance), **not** by a new `PatternProvider<>` entry.
+> 2. **Gating predicate:** the canonical Text-pattern gate is `IsPlatformDocument() || IsTextField() || IsText()` (ax_platform_node_win.cc:8699), not the `IsText()||IsTextField()||kRootWebArea` shown below — match the canonical predicate.
+>
+> `UIA_TextPattern2Id`-in-break-list (8733) and the `get_Target` reverse-relation reuse (2690-2697) are correctly cited; the COM-map/QI shape is the right approach. Treat the code blocks below as intent, to be reconciled against the two corrections above when built.
+
 ## Size
 
 | Change | Lines |

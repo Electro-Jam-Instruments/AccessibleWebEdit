@@ -31,6 +31,8 @@ Consequences: in a real browser a canvas editor using EditContext gets this for 
 
 ## Finding 3 — The PDF producer proves the full cross-tree contract, including actions back into the producer.
 
+> **Verification note (expert review 2026-06-16):** the line citations below are against the full Chromium tree. The *lean* checkout used for the Linux test build (results/ENVIRONMENT.md) does **not** include `components/pdf/`, so these specific lines cannot be re-confirmed from that artifact — the claim is very likely correct (PDFium's a11y tree is well-known) but should be re-verified against a full checkout on the VM (review backlog item, NEXT-QUESTIONS). Do not treat Finding 3 as locally reproduced.
+
 components/pdf/renderer/pdf_accessibility_tree.cc is a complete production non-Blink producer:
 - Owns its AXTreeData: sets tree_id and focus_id (lines 431 to 438), computes full selection including direction and node-plus-offset endpoints (lines 688 to 707), exposed via GetTreeData (lines 856 to 868). Tree-level caret and selection from a non-Blink producer is established practice.
 - AT actions route back through an AXActionTarget adapter (CreateActionTarget, header line 123; PdfAXActionTarget) and HandleAction (line 978), covering selection setting, scrolling, show-context-menu (lines 941 to 951). The action channel needed for ITextRangeProvider Select, ScrollIntoView, ShowContextMenu exists and is symmetric.

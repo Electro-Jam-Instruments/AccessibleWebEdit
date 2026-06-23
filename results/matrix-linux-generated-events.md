@@ -1,6 +1,6 @@
 # Matrix Extension — Linux Generated-Event Results (docs/10 rows + T2-7 first half)
 
-Date: 2026-06-12. Same binary, environment, and logging contract as results/T2-linux-generated-events.md (provenance: results/ENVIRONMENT.md; source: tests/linux-t2/ax_matrix_t2_unittest.cc). **9/9 tests pass; combined suite including the original T2 tests and the 87-test upstream baseline: 104/104.**
+Date: 2026-06-12. Same binary, environment, and logging contract as results/T2-linux-generated-events.md (provenance: results/ENVIRONMENT.md; source: tests/linux-t2/ax_matrix_t2_unittest.cc). **9/9 tests pass; full binary 109/109 (verified via `--gtest_list_tests`): 12 `AXMatrixT2Test` + 9 `AXEventGeneratorT2Test` (incl. the T2-2b/T2-2c isolation tests added 2026-06-16) + 88 upstream `AXEventGenerator*` baseline.** (Earlier "104" was a stale count.)
 
 ## T2-7, generated-event half — ANSWERED at this layer
 
@@ -47,13 +47,13 @@ Also note for the marker row: marker events target the **field ancestor**, consi
 
 ```
 out/rel/ax_t2_unittests --gtest_filter='AXMatrixT2Test.*' --single-process-tests
-out/rel/ax_t2_unittests    # full 104-test suite
+out/rel/ax_t2_unittests    # full 109-test suite
 ```
 
 
 ## Extension 2026-06-14: comments, live regions, row reorder (3 more rows)
 
-Three additional docs/10 rows verified by test (full suite now 107 tests, all pass):
+Three additional docs/10 rows verified by test (full suite now 109 tests, all pass):
 
 | Row | Result | Event log |
 |---|---|---|

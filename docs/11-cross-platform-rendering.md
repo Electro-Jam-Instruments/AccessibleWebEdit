@@ -10,6 +10,8 @@ Date: 2026-06-13. Scope: the sighted-facing rendering surface (the canvas editor
 
 ## Decomposition: ~80% shared core, thin per-platform shell
 
+> **Caveat (expert review 2026-06-16):** the "~80% shared / thin 20% shell" split is an *estimate, not a derivation*, and it is in tension with this doc's own claim that IME "eats cross-platform editor projects." The per-platform shell is "thin" in line count but holds the dominant schedule risk (IME). Treat 80/20 as optimistic; the real driver is how much of `ui/base/ime` and the GPU/Ozone stack you inherit (open decisions #1, #4) and the in-tree maintenance cost (review backlog C1). Don't plan headcount off the 80/20 number.
+
 **Shared core, write-once C++ (the bulk):**
 - Document model + edit operations
 - Text layout + shaping: HarfBuzz (shaping) + line-breaking/wrap. Skia's `SkParagraph`/`SkShaper` (Flutter's stack) is the natural fit since Skia is already in the tree.
@@ -45,7 +47,7 @@ Recommendation: **(A)**. The project is already committed to Chromium's `ui/acce
 - **Windows first:** Win32 + ANGLE surface, TSF input, DirectWrite fonts, UIA a11y. Also where the whole UIA thesis lives, so it doubles as the proof platform. This milestone IS the B-lite app made visual + interactive on the VM.
 - **Mac second:** Cocoa + Metal, NSTextInputClient, CoreText, NSAccessibility. Cleanest of the desktop three.
 - **Linux third:** Ozone + GL, IBus/fcitx, fontconfig, AT-SPI. Most of the rendering core is already validated here from the 2026-06-12/13 Linux work.
-- **Mobile last:** shells get heavier (touch, soft-keyboard IME, lifecycle, smaller a11y API surface); lowest priority — defer until the desktop three are solid.
+- **Mobile last:** shells get heavier (touch, soft-keyboard IME, lifecycle, smaller a11y API surface); lowest priority — defer until the desktop three are solid. **Caveat (expert review 2026-06-16):** Android `AccessibilityNodeInfo` / iOS `UIAccessibility` expose a *weaker text API* than UIA Text pattern / IA2 — the rich Text-pattern editing fidelity this project targets likely is **not expressible at the same fidelity on mobile**, so "full fidelity on all 5 platforms" is probably false for 2 of 5. Validate the mobile text-API ceiling before promising parity.
 
 Realistic shape: shared core + Windows shell = first milestone (the visual/interactive B-lite on the VM); Mac and Linux are incremental shells reusing the same core; mobile is a second phase.
 

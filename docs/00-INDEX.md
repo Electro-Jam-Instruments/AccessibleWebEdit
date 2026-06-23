@@ -6,8 +6,8 @@ This index orients a new reader (or a fresh session). Start here.
 
 ## Where the project stands (2026-06-15)
 
-- **Foundation PROVEN on Linux:** the generated-event engine that drives all editing semantics is tested — **107 passing tests** (`tests/linux-t2/`), plus a runnable B-lite spine (`blite/`).
-- **Options SETTLED:** native is the only path to *real* editing fidelity; the web path is permanently capped (AOM virtual nodes dead) — see doc 13.
+- **Foundation event-layer-validated on Linux:** the generated-event engine that drives all editing semantics is tested — **109 passing tests** (`tests/linux-t2/`), plus a runnable B-lite spine (`blite/`). This proves the *generation layer*, not screen-reader-observable fidelity (UIA translation + NVDA are VM-gated, not yet run).
+- **Options analysis (strong, not yet falsified):** native is the path that *can* deliver full editing fidelity; the web path is **capped today** by the mirror-DOM approach (AOM virtual nodes are dead, though HTML-in-Canvas `drawElement` is an active web effort that could lift the cap). The "native is superior" claim is argued from source + the design, **not yet measured end-to-end through a screen reader** — see doc 13 and results/expert-reviews/AGGREGATE.md.
 - **Critical path = the Windows VM (TASK-00):** everything screen-reader-observable (UIA finalize, IME, actions, NVDA) is written and queued but blocked on VM provisioning (your Azure step).
 
 ## Docs
@@ -33,7 +33,8 @@ This index orients a new reader (or a fresh session). Start here.
 | results/ENVIRONMENT.md | Full build provenance + the local-modifications ledger (how the pinned source was built lean). |
 | results/NEXT-QUESTIONS.md | The consolidated decision/verification queue for the planning session + VM. |
 | results/blite-host-run.txt | Captured run of the B-lite spine. |
-| results/expert-reviews/AGGREGATE.md | Three independent expert reviews (Chromium internals / AT interop / standards) + rated aggregate. Surfaces ~7 concrete fixes and a harder verification bar. |
+| results/expert-reviews/AGGREGATE.md | Three independent expert reviews + rated aggregate. |
+| results/expert-reviews/REVIEW-BACKLOG.md | Status-tagged tracker: fixes DONE this session + the complete open list (VM-gated / decisions / spikes). |
 
 ## Code & patches
 

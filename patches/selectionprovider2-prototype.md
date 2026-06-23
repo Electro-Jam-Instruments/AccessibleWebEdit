@@ -44,12 +44,9 @@ Inserted after `get_IsSelectionRequired` (after ~line 3286). Reuses the exact se
 ```cpp
 //
 // ISelectionProvider2 implementation.
+// (Each method re-uses the GetMaxSelectableItems + GetSelectedItems
+// enumeration that ISelectionProvider::GetSelection already relies on.)
 //
-
-namespace {
-// Shared helper: return the selected children of this container, in tree order,
-// using the same enumeration ISelectionProvider::GetSelection relies on.
-}  // namespace
 
 IFACEMETHODIMP AXPlatformNodeWin::get_FirstSelectedItem(
     IRawElementProviderSimple** result) {
