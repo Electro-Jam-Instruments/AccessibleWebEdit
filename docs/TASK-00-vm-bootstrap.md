@@ -185,7 +185,7 @@ if (-not (Test-Path $claude)) {
 $pat = (Get-Content "C:\bootstrap\github.pat" -Raw).Trim()
 git config --global credential.helper store
 git config --global user.name  "AWE Build VM"
-git config --global user.email "awe-vm@electro-jam.com"
+git config --global user.email "awe-build-bot@users.noreply.github.com"
 Set-Content -Path "$env:USERPROFILE\.git-credentials" -Value "https://x-access-token:$pat@github.com" -NoNewline
 
 # NVDA screen reader: unattended install (verification layer -- see docs/TASK-00a-nvda-verification.md)

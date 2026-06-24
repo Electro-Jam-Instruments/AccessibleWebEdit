@@ -35,6 +35,7 @@ This index orients a new reader (or a fresh session). Start here.
 | results/blite-host-run.txt | Captured run of the B-lite spine. |
 | results/expert-reviews/AGGREGATE.md | Three independent expert reviews + rated aggregate. |
 | results/expert-reviews/REVIEW-BACKLOG.md | Status-tagged tracker: fixes DONE this session + the complete open list (VM-gated / decisions / spikes). |
+| results/PUBLICATION-READINESS.md | Open-source readiness audit (secrets/PII/license/attribution) + the decisions still yours before going public. |
 
 ## Code & patches
 

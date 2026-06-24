@@ -1,0 +1,32 @@
+# Secrets / credentials — never commit (the bootstrap scripts write these locally)
+*.pat
+github.pat
+*.pem
+*.key
+.git-credentials
+*.env
+.env
+
+# Build output / Chromium checkout (this repo never vendors Chromium source)
+out/
+/chromium/
+/src/
+*.o
+*.obj
+*.exe
+*.pdb
+*.ninja
+*.ninja_log
+.ninja_deps
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Scratch
+/scratch/
+*.tmp
