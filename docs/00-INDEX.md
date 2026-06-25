@@ -34,6 +34,7 @@ This index orients a new reader (or a fresh session). Start here.
 | results/ENVIRONMENT.md | Full build provenance + the local-modifications ledger (how the pinned source was built lean). |
 | results/NEXT-QUESTIONS.md | The consolidated decision/verification queue for the planning session + VM. |
 | results/blite-host-run.txt | Captured run of the B-lite spine. |
+| results/demo-e2e-run.txt | Captured run of the end-to-end host (`demo/`): real Chromium generated events + `kCaretBounds` per editing step. |
 | results/expert-reviews/AGGREGATE.md | Three independent expert reviews + rated aggregate. |
 | results/expert-reviews/REVIEW-BACKLOG.md | Status-tagged tracker: fixes DONE this session + the complete open list (VM-gated / decisions / spikes). |
 | results/PUBLICATION-READINESS.md | Open-source readiness audit (secrets/PII/license/attribution) + the decisions still yours before going public. |
@@ -44,6 +45,7 @@ This index orients a new reader (or a fresh session). Start here.
 |---|---|
 | blite/ | The runnable B-lite lean spine (surface → bridge → AXTree → AXEventGenerator) + README. |
 | blite/draw/ | The drawn demo (doc 14, Stage 0): one layout pass → real rendered pixels (`sample.png`) **and** the matching a11y geometry. Standalone, builds with `g++`. |
+| demo/ | The cross-platform **end-to-end** demo (doc 14, Stages 1/1b): shared core → Linux frames (`demo.gif`) + **real** Chromium `AXTree`/`AXEventGenerator` events (`results/demo-e2e-run.txt`) + an interactive Win32 window. UIA→NVDA staged for Win11. See `demo/README.md`. |
 | tests/linux-t2/ | The T2 + matrix generated-event tests, the BUILD patch, and args — reproducible against the pinned tag (and registered in the canonical `accessibility_unittests` for the VM). |
 | patches/ | Four BROWSER-WORK prototype patches (SelectionPattern2, ITextProvider2/RangeFromAnnotation, TEXT_ATTRIBUTE_CHANGED UIA event, annotation author/datetime) — the standards exhibits. Build on the VM. |
 

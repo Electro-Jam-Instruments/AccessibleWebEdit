@@ -1,0 +1,72 @@
+=== AccessibleWebEdit e2e: demo core -> REAL AXTree + AXEventGenerator ===
+pipeline: script -> layout -> AXTreeUpdate -> Unserialize -> generated events
+
+[0] start (empty field)  value=""
+  (initial tree built)
+
+[1] type "Hello"  value="Hello"  caret=5  kCaretBounds=[33,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    editableTextChanged on node 2
+    textSelectionChanged on node 2
+    valueInTextFieldChanged on node 2
+    nameChanged on node 3
+
+[2] type ", World"  value="Hello, World"  caret=12  kCaretBounds=[75,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    editableTextChanged on node 2
+    textSelectionChanged on node 2
+    valueInTextFieldChanged on node 2
+    nameChanged on node 3
+
+[3] type "!"  value="Hello, World!"  caret=13  kCaretBounds=[81,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    editableTextChanged on node 2
+    textSelectionChanged on node 2
+    valueInTextFieldChanged on node 2
+    nameChanged on node 3
+
+[4] select "World"  value="Hello, World!"  caret=12  kCaretBounds=[75,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    textSelectionChanged on node 2
+
+[5] replace selection -> "there"  value="Hello, there!"  caret=12  kCaretBounds=[75,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    editableTextChanged on node 2
+    textSelectionChanged on node 2
+    valueInTextFieldChanged on node 2
+    nameChanged on node 3
+
+[6] backspace x2  value="Hello, the!"  caret=10  kCaretBounds=[63,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    editableTextChanged on node 2
+    textSelectionChanged on node 2
+    valueInTextFieldChanged on node 2
+    nameChanged on node 3
+
+[7] caret to home  value="Hello, the!"  caret=0  kCaretBounds=[3,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    textSelectionChanged on node 2
+
+[8] type "Hey. " at home  value="Hey. Hello, the!"  caret=5  kCaretBounds=[33,3,1,9]
+  REAL generated events:
+    documentSelectionChanged on node 1
+    caretBoundsChanged on node 2
+    editableTextChanged on node 2
+    textSelectionChanged on node 2
+    valueInTextFieldChanged on node 2
+    nameChanged on node 3
+
+=== e2e OK: every event above came from Chromium's real AXEventGenerator ===

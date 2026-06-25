@@ -1,0 +1,20 @@
+# In-tree build for the end-to-end host (demo_e2e). Mirrors blite/BUILD.gn.
+#
+# Staging: copy the demo core headers + demo_e2e.cc into a single tree dir
+# //ui/accessibility/demo_e2e/ (flatten), drop this file there as BUILD.gn, and
+# add "//ui/accessibility/demo_e2e:demo_e2e" to the deps of the GN root group
+# //ui/accessibility/t2:t2 (see results/ENVIRONMENT.md for the t2 root setup).
+# Then:  gn gen out/rel  &&  ninja -C out/rel ui/accessibility/demo_e2e:demo_e2e
+#
+# Same lean cone as blite_host: //ui/accessibility:accessibility_internal +
+# //base. No platform-node layer, no v8.
+import("//testing/test.gni")
+
+executable("demo_e2e") {
+  testonly = true
+  sources = [ "demo_e2e.cc" ]
+  deps = [
+    "//base",
+    "//ui/accessibility:accessibility_internal",
+  ]
+}

@@ -28,17 +28,19 @@ What Stage 0 deliberately fakes: real glyph shaping/fonts, a GPU surface, a
 window/event loop, IME, and the *live* AX tree (it prints the geometry rather
 than feeding a real `AXTree`). Those are the next stages.
 
-## Stage 1 — fuse the drawn layout into the real AX tree (Linux, in-tree)
+## Stage 1 — DONE: fuse the drawn layout into the real AX tree (Linux, in-tree)
 
-Make the accessibility half real without leaving Linux. Wire the shared
-`layout_engine.h` into the in-tree `blite_host.cc` so the caret rect is written
-as `AXNodeData`'s `kCaretBounds` IntList on the field node, then let
-`AXEventGenerator` fire `CARET_BOUNDS_CHANGED` for real (today the host moves the
-caret via `AXTreeData` selection only). Deliverable: the in-tree host emits the
-full editing event set **plus** caret bounds sourced from the same `Layout` the
-renderer uses. Cost: small — same lean build cone as the existing host
-(`//ui/accessibility` + `//base`), no new heavy deps. This closes the gap
-between Stage 0's *printed* geometry and a real generated event.
+The accessibility half is now real, built and run on Linux: `demo/` (the
+cross-platform end-to-end). `demo/platform/linux_headless/demo_e2e.cc` feeds the
+shared core (`demo/core/`) into a live `AXTree` + `AXEventGenerator` and emits
+the **real** generated event set per editing step, with `kCaretBounds` written
+on the field node from the same `Layout` the renderer paints. Captured run:
+`results/demo-e2e-run.txt`. The event sets are semantically correct per step —
+a pure selection or caret move emits selection/`caretBoundsChanged` only (no
+spurious text-changed), and text edits emit the full
+`editableTextChanged`/`valueInTextFieldChanged`/`nameChanged` set. Same lean
+build cone as `blite_host` (`//ui/accessibility:accessibility_internal` +
+`//base`), wired via the `//ui/accessibility/t2:t2` GN root group.
 
 ## Stage 2 — real pixels (Windows-first, the doc-11 milestone)
 
@@ -87,7 +89,12 @@ shared `layout_engine.h` is the seam that survives either choice.
 | Stage | What | State |
 |---|---|---|
 | 0 | Lean layout → pixels + printed AX geometry | **DONE** (`blite/draw/`, runs on Linux) |
-| 1 | Same layout → real `kCaretBounds` in the in-tree AXTree | Next; Linux, lean build |
-| 2 | Skia + DirectWrite + Win32 window (real pixels) | Windows VM |
+| 1 | Same layout → real generated events + `kCaretBounds` in a live AXTree | **DONE** (`demo/`, `results/demo-e2e-run.txt`) |
+| 1b | Interactive Win32 window + keyboard, same core (standalone, no Chromium) | **DONE** (`demo/platform/win32/win_main.cc`, builds on Win11) |
+| 2 | Skia + DirectWrite for production text (real shaping/fonts) | Windows VM |
 | 3 | TSF input + IME composition | Windows VM (hard part) |
-| 4 | NVDA end-to-end: see it + hear it from one layout | Windows VM (proves fidelity) |
+| 4 | UIA (`AXPlatformNodeWin`) + NVDA: see it + hear it from one layout | Windows VM — `demo/platform/win32/uia_bridge.md`, proves fidelity |
+
+The cross-platform end-to-end demo lives in `demo/` (its own README has the
+architecture diagram and per-OS run steps). `blite/draw/` remains the minimal
+Stage-0 seed.
