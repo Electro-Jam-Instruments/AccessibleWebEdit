@@ -21,6 +21,7 @@ This index orients a new reader (or a fresh session). Start here.
 | **12-ime-support.md** | Why IME is mandatory for a custom surface, the per-platform contract, and the accessibility tie-in. |
 | **13-chrome-api-and-aom-fit.md** | How the web APIs (AOM, EditContext, ariaNotify, HTML-in-Canvas) relate to the native approach. Native vs web vs standards-play. |
 | **14-drawn-demo.md** | The staged plan to make B-lite *visual* — the custom drawn edit surface. Stage 0 (lean layout→pixels+a11y, one source of truth) is DONE and runnable on Linux; Stages 1–4 lead to a Windows/Skia/NVDA "see it and hear it from one layout" demo. |
+| **15-rich-editor-engines-fit.md** | Can a CKEditor 5 / Lexical–style editor use the producer API? Their model+delta layers fit the contract; the API is native-only (web is sandboxed but doesn't need it). What must still be built for a native shell, plus a no-VM "bring-your-own-model" headless-Lexical spike. |
 | **TASK-00-vm-bootstrap.md** | Provision + bootstrap the Windows 11 VM (cloud path). |
 | **TASK-00b-local-windows-setup.md** | If you have a capable local Win11 box (e.g. Minisforum MS-01): skip Azure, build/test locally. Simpler + free. Recommended when available. |
 | **TASK-00a-nvda-verification.md** | NVDA (not Narrator) as the AT verification layer, via speech logs. |
