@@ -1,0 +1,30 @@
+=== B-lite drawn demo (lean CPU raster) ===
+surface text: "Hello, World!"  caret=13  selection=[7, 12)
+one layout pass -> { pixels, a11y geometry }
+
+wrote image: /tmp/blite_draw.ppm  (656x112)
+
+--- accessibility geometry (from the SAME layout) ---
+  kCaretBounds = [632, 8, 8, 72]   (caret index 13)
+  selection bounds = [352, 8, 240, 72]   (chars [7, 12) = "World")
+  per-character bounds:
+    'H'  [16, 16, 40, 56]
+    'e'  [64, 16, 40, 56]
+    'l'  [112, 16, 40, 56]
+    'l'  [160, 16, 40, 56]
+    'o'  [208, 16, 40, 56]
+    ','  [256, 16, 40, 56]
+    ' '  [304, 16, 40, 56]
+    'W'  [352, 16, 40, 56]
+    'o'  [400, 16, 40, 56]
+    'r'  [448, 16, 40, 56]
+    'l'  [496, 16, 40, 56]
+    'd'  [544, 16, 40, 56]
+    '!'  [592, 16, 40, 56]
+
+--- generated a11y events (mirrors blite_host / T2) ---
+  editableTextChanged, valueInTextFieldChanged  (field ancestor)
+  documentSelectionChanged, textSelectionChanged
+  caretBoundsChanged  (from kCaretBounds above)
+
+=== drawn sample OK: model -> one layout -> pixels + a11y (no drift) ===

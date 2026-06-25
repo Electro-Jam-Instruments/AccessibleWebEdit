@@ -20,6 +20,7 @@ This index orients a new reader (or a fresh session). Start here.
 | **11-cross-platform-rendering.md** | What it takes to build the sighted-facing rendering UI across Win/Mac/Linux/mobile. ~80% shared core + thin per-platform shell; IME is the hard part. |
 | **12-ime-support.md** | Why IME is mandatory for a custom surface, the per-platform contract, and the accessibility tie-in. |
 | **13-chrome-api-and-aom-fit.md** | How the web APIs (AOM, EditContext, ariaNotify, HTML-in-Canvas) relate to the native approach. Native vs web vs standards-play. |
+| **14-drawn-demo.md** | The staged plan to make B-lite *visual* — the custom drawn edit surface. Stage 0 (lean layout→pixels+a11y, one source of truth) is DONE and runnable on Linux; Stages 1–4 lead to a Windows/Skia/NVDA "see it and hear it from one layout" demo. |
 | **TASK-00-vm-bootstrap.md** | Provision + bootstrap the Windows 11 VM (cloud path). |
 | **TASK-00b-local-windows-setup.md** | If you have a capable local Win11 box (e.g. Minisforum MS-01): skip Azure, build/test locally. Simpler + free. Recommended when available. |
 | **TASK-00a-nvda-verification.md** | NVDA (not Narrator) as the AT verification layer, via speech logs. |
@@ -42,6 +43,7 @@ This index orients a new reader (or a fresh session). Start here.
 | Path | What it is |
 |---|---|
 | blite/ | The runnable B-lite lean spine (surface → bridge → AXTree → AXEventGenerator) + README. |
+| blite/draw/ | The drawn demo (doc 14, Stage 0): one layout pass → real rendered pixels (`sample.png`) **and** the matching a11y geometry. Standalone, builds with `g++`. |
 | tests/linux-t2/ | The T2 + matrix generated-event tests, the BUILD patch, and args — reproducible against the pinned tag (and registered in the canonical `accessibility_unittests` for the VM). |
 | patches/ | Four BROWSER-WORK prototype patches (SelectionPattern2, ITextProvider2/RangeFromAnnotation, TEXT_ATTRIBUTE_CHANGED UIA event, annotation author/datetime) — the standards exhibits. Build on the VM. |
 
