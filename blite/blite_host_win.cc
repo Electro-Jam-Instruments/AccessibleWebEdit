@@ -1098,23 +1098,17 @@ int Run() {
   // scripted auto-edit that the probe / NVDA capture runs depend on.
   const bool viewer = ::wcsstr(::GetCommandLineW(), L"--viewer") != nullptr;
   if (viewer) {
-    // Reliably make our window the FOREGROUND + active + keyboard-focused window.
-    // SetForegroundWindow alone is unreliable (Windows foreground lock), so
-    // attach to the current foreground thread's input queue first -- the standard
-    // trick. Without real keyboard focus, WM_CHAR never arrives and you can't type.
+    // GENTLE activation only. Do NOT use the AttachThreadInput foreground-steal
+    // trick: it can DEADLOCK against a running screen reader's input hooks (NVDA)
+    // and locks the app up at launch, and stealing input is disruptive. A
+    // freshly-launched window is usually allowed to take foreground; if not, a
+    // click activates it (WM_LBUTTONDOWN -> SetFocus).
     ::ShowWindow(hwnd, SW_SHOW);
-    HWND fg = ::GetForegroundWindow();
-    DWORD fg_thread = fg ? ::GetWindowThreadProcessId(fg, nullptr) : 0;
-    DWORD my_thread = ::GetCurrentThreadId();
-    if (fg_thread && fg_thread != my_thread)
-      ::AttachThreadInput(my_thread, fg_thread, TRUE);
-    ::BringWindowToTop(hwnd);
     ::SetForegroundWindow(hwnd);
-    ::SetActiveWindow(hwnd);
     ::SetFocus(hwnd);
-    if (fg_thread && fg_thread != my_thread)
-      ::AttachThreadInput(my_thread, fg_thread, FALSE);
 
+    // Fire focus only AFTER we are about to pump messages, so an attached AT's
+    // synchronous queries (which marshal onto this STA) get serviced promptly.
     if (AXPlatformNode* f = host.PlatformNodeFor(kField))
       f->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
     ::InvalidateRect(hwnd, nullptr, TRUE);

@@ -64,6 +64,26 @@ Verified by native clients:
   (`scripts/uiaprobe_attrs.cpp`). Atomic text field ⇒ attrs read from the FIELD (its `GetLowestPlatformAncestor`).
 - **Attribute-change detection:** the edit flips bold off → `FontWeight 700→400` post-edit, signalled by `TextChanged`.
 
+### NVDA actually ran on our surface (2026-06-26) — FIRST real screen-reader contact
+Autonomous No-speech capture (`scripts/_nvda-capture.ps1` logic; NVDA 2026.x, log-level 12,
+`results/nvda-v1-live.log`). NVDA attached to our custom non-Blink UIA provider and:
+- **Did NOT hang** the app (scripted mode; the viewer-mode lock-up was the `AttachThreadInput`
+  foreground-steal, now removed).
+- **Recognized our field as a genuine editable text control:** NVDA instantiated it as
+  `NVDAObjects.Dynamic_ChromiumUIAEditableTextWithAutoSelectDetectionUIA` — i.e. NVDA's UIA handler
+  classifies our surface exactly like a Chromium web editable field. Announced our window + `document` root.
+- **BUT errored reading the text on focus:** `error executing event: gainFocus on <...EditableText...>`,
+  failing in NVDA's `NVDAObjects\UIA\web.pyc` `_moveToEdgeOfReplacedContent` /
+  `_get_UIAElementAtStartWithReplacedContent`. So NVDA did not cleanly speak "edit, hello".
+- Test artifact: NVDA also read the host's **console stdout** (our debug `cout`) as terminal text —
+  the host should redirect stdout / drop the debug prints for a clean capture.
+
+**Diagnosis / next:** "replaced content" = embedded UIA elements inside editable text. Our
+Field→StaticText→**exposed** InlineTextBox structure likely surfaces the inner text as an embedded element
+NVDA then fails to navigate. Candidate fix: keep `kInline` in the AX tree for AXPosition but DON'T expose it
+as a navigable UIA element (mark ignored / no platform node), so NVDA sees flat field text. This is the V1
+finish-line bug — the producer→UIA→NVDA chain connects and NVDA recognizes the field; text read-back is the gap.
+
 ### Remaining for the full V1
 1. **NVDA end-to-end** on an unlocked desktop (the faithful AT, with UIAccess) — start app-first. The only
    remaining gate; everything above is the native UIA *client* (NVDA's API), not NVDA's speech.
