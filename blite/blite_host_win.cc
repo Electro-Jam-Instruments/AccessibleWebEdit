@@ -159,11 +159,12 @@ struct Rect {
 };
 
 struct Metrics {
-  int origin_x = 12;
+  int origin_x = 14;
   int origin_y = 16;
-  int advance = 14;  // per-glyph x step (monospace)
-  int cell_w = 12;
-  int cell_h = 22;
+  int advance = 13;  // per-glyph x step; the painter forces the font cell to
+                     // this exact width so painted glyphs == layout positions.
+  int cell_w = 13;
+  int cell_h = 24;
 };
 
 struct Layout {
@@ -829,8 +830,13 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
       if (g_host && g_host->editor()) {
         const MockCanvasEditor& ed = *g_host->editor();
         const Layout lay = LayOut(ed);
+        const Metrics m;
+        // Force the fixed-pitch font's cell to exactly the layout advance so the
+        // whole-string draw lands each glyph at origin_x + i*advance -- matching
+        // the layout (and the UIA geometry) without the per-glyph gaps that
+        // looked uneven before.
         HFONT font = CreateFontW(
-            /*height=*/22, /*width=*/0, 0, 0,
+            /*height=*/m.cell_h, /*width=*/m.advance, 0, 0,
             ed.bold() ? FW_BOLD : FW_NORMAL, /*italic=*/ed.italic() ? TRUE : FALSE,
             /*underline=*/ed.underline() ? TRUE : FALSE, /*strikeout=*/FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -838,11 +844,11 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         HFONT old_font = static_cast<HFONT>(SelectObject(hdc, font));
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, RGB(0, 0, 0));
+        // One TextOut for the whole run -> continuous underline + natural italic.
         const std::string& t = ed.text();
-        for (size_t i = 0; i < t.size() && i < lay.glyphs.size(); ++i) {
-          wchar_t ch = static_cast<wchar_t>(static_cast<unsigned char>(t[i]));
-          TextOutW(hdc, lay.glyphs[i].x, lay.glyphs[i].y, &ch, 1);
-        }
+        std::wstring wt(t.begin(), t.end());
+        TextOutW(hdc, m.origin_x, m.origin_y, wt.c_str(),
+                 static_cast<int>(wt.size()));
         // Caret: a filled vertical bar at the layout caret rect.
         RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
                    lay.caret.y + lay.caret.h};
@@ -1034,11 +1040,22 @@ int Run() {
   FirePlatformEditEvents(&host);
   ::InvalidateRect(hwnd, nullptr, TRUE);  // repaint with the edited text/caret
 
-  // 5. Keep pumping so NVDA can process + announce the events, then self-exit
-  //    (autonomous capture leaves no orphan window). ~12s is ample for NVDA to
-  //    coalesce + speak the TextChanged + TextSelectionChanged.
-  std::cout << "\nedit fired; pumping ~12s for NVDA to announce, then exit.\n";
-  pump_for(12000);
+  // 5. Either stay open for a human to look at (--viewer: run a normal message
+  //    loop until the window is closed), or self-exit after ~12s (the default,
+  //    so autonomous probe/NVDA capture leaves no orphan window).
+  const bool viewer = ::wcsstr(::GetCommandLineW(), L"--viewer") != nullptr;
+  if (viewer) {
+    std::cout << "\nedit fired; VIEWER mode -- window stays open, close it to "
+                 "exit.\n";
+    MSG msg;
+    while (::GetMessage(&msg, nullptr, 0, 0) > 0) {
+      ::TranslateMessage(&msg);
+      ::DispatchMessage(&msg);
+    }
+  } else {
+    std::cout << "\nedit fired; pumping ~12s for NVDA to announce, then exit.\n";
+    pump_for(12000);
+  }
 
   g_host = nullptr;
   std::cout << "\n=== B-lite Windows host exited ===\n";
