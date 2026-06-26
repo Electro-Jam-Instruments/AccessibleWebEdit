@@ -39,7 +39,7 @@
    }
  
    deps = []
-@@ -311,6 +320,27 @@
+@@ -311,6 +320,28 @@
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
  }
  
@@ -62,6 +62,7 @@
 +    "//testing/gmock",
 +    "//testing/gtest",
 +  ]
++  configs += [ "//build/config/compiler:no_exit_time_destructors" ]
 +}
 +
  test("accessibility_unittests") {

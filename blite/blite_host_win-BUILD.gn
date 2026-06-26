@@ -1,0 +1,59 @@
+# B-lite host (Windows / UIA) executable. See blite_host_win.cc.
+#
+# This target EXTENDS the lean Linux spine (blite_host, see BUILD.gn) with the
+# Windows platform-node / UIA layer. Unlike blite_host (which depends only on
+# //ui/accessibility:accessibility_internal + //base -- the lean cone the T2
+# tests use), this target intentionally LEAVES the lean cone: it pulls the
+# platform layer (AXPlatformNodeWin / AXFragmentRootWin and their deps). That is
+# EXPECTED on Windows -- the whole point of this host is to link the
+# platform/UIA layer blite_host omits, so a real UIA client (NVDA) can attach.
+# See blite_host_win.README.md and docs/09.
+#
+# COMPILE STATUS: builds + links against tag 149.0.7827.115 as
+# //ui/accessibility/blite:blite_host_win. Dep labels below are RESOLVED against
+# the real tree (see notes); the earlier draft's guesses were corrected.
+import("//testing/test.gni")
+
+# Windows-only: the platform/UIA layer this target needs does not exist on
+# other platforms.
+assert(is_win, "blite_host_win is Windows-only (UIA platform layer).")
+
+executable("blite_host_win") {
+  testonly = true
+  sources = [ "blite_host_win.cc" ]
+  deps = [
+    "//base",
+
+    # RESOLVED(VM): depend on the PUBLIC //ui/accessibility group, NOT
+    # //ui/accessibility/platform directly. The platform component restricts its
+    # `visibility` to a fixed allowlist (//ui/accessibility, //ui/views, a
+    # couple of chrome dirs) -- //ui/accessibility/blite is not on it, so a
+    # direct dep is a GN visibility error. The //ui/accessibility group has
+    # public_deps = [ accessibility_internal, //ui/accessibility/platform ], so
+    # depending on it transitively exposes AXTree/AXEventGenerator AND
+    # AXPlatformNodeWin / AXFragmentRootWin / AXPlatformNodeDelegate headers and
+    # link targets, through an allowed edge.
+    "//ui/accessibility",
+
+    # RESOLVED(VM): AXPlatformForTest (ax_platform_for_test.h) lives in
+    # //ui/accessibility:test_support, not in the platform component. The host
+    # needs a process-wide AXPlatform instance before creating any
+    # AXPlatformNode; AXPlatformForTest provides one (it owns an AXPlatform and
+    # supplies the Windows ProductStrings). testonly is required because of this.
+    "//ui/accessibility:test_support",
+  ]
+
+  # System import libs for the Win32 + UIA calls made directly in the host
+  # (CreateWindowExW, UiaReturnRawElementProvider, LresultFromObject). The UIA
+  # core provider lib (uiautomationcore) supplies UiaReturnRawElementProvider /
+  # UiaRaiseAutomationEvent; oleacc supplies LresultFromObject.
+  # NOTE: many of these are already pulled transitively by the platform
+  # component; listed explicitly so the direct calls in this .cc link even if
+  # the transitive set changes. Harmless if redundant.
+  libs = [
+    "uiautomationcore.lib",
+    "oleacc.lib",
+    "user32.lib",
+    "ole32.lib",
+  ]
+}

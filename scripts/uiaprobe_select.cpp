@@ -1,0 +1,80 @@
+// Native UIA client that issues a SELECTION action (client->provider cursor
+// routing): finds the Edit's Text pattern, reads the current selection, calls
+// ITextRangeProvider::Select on the document range, reads the selection back.
+// Tells us whether kSetSelection round-trips. Usage: uiaprobe_select.exe <hwnd>
+#include <windows.h>
+#include <objbase.h>
+#include <uiautomation.h>
+#include <cstdio>
+
+static IUIAutomationElement* FindEdit(IUIAutomationTreeWalker* w, IUIAutomationElement* el) {
+  IUIAutomationElement* child = nullptr;
+  if (FAILED(w->GetFirstChildElement(el, &child)) || !child) return nullptr;
+  while (child) {
+    CONTROLTYPEID ct = 0; child->get_CurrentControlType(&ct);
+    if (ct == UIA_EditControlTypeId) return child;
+    IUIAutomationElement* found = FindEdit(w, child);
+    if (found) { child->Release(); return found; }
+    IUIAutomationElement* next = nullptr;
+    w->GetNextSiblingElement(child, &next);
+    child->Release(); child = next;
+  }
+  return nullptr;
+}
+
+// Print the current selection's text (or "<degenerate/none>").
+static void PrintSelection(IUIAutomationTextPattern* tp, const wchar_t* label) {
+  IUIAutomationTextRangeArray* sel = nullptr;
+  if (SUCCEEDED(tp->GetSelection(&sel)) && sel) {
+    int n = 0; sel->get_Length(&n);
+    if (n > 0) {
+      IUIAutomationTextRange* r0 = nullptr;
+      if (SUCCEEDED(sel->GetElement(0, &r0)) && r0) {
+        BSTR t = nullptr; HRESULT gh = r0->GetText(80, &t);
+        wprintf(L"%s: ranges=%d GetText hr=0x%08x text='%s'\n", label, n, (unsigned)gh,
+                (t && *t) ? t : L"<empty>");
+        if (t) SysFreeString(t); r0->Release();
+      }
+    } else wprintf(L"%s: ranges=0\n", label);
+    sel->Release();
+  } else wprintf(L"%s: GetSelection failed\n", label);
+}
+
+int main(int argc, char** argv) {
+  if (argc < 2) { wprintf(L"usage: uiaprobe_select <hwnd-decimal>\n"); return 1; }
+  HWND hwnd = (HWND)(INT_PTR)_atoi64(argv[1]);
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  IUIAutomation* uia = nullptr;
+  if (FAILED(CoCreateInstance(CLSID_CUIAutomation8, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&uia))) || !uia) {
+    wprintf(L"CoCreateInstance failed\n"); return 2;
+  }
+  IUIAutomationElement* root = nullptr;
+  if (FAILED(uia->ElementFromHandle(hwnd, &root)) || !root) { wprintf(L"ElementFromHandle failed\n"); return 3; }
+  IUIAutomationTreeWalker* walker = nullptr; uia->get_RawViewWalker(&walker);
+  IUIAutomationElement* edit = walker ? FindEdit(walker, root) : nullptr;
+  if (!edit) { wprintf(L"no Edit found\n"); return 4; }
+
+  IUIAutomationTextPattern* tp = nullptr;
+  if (FAILED(edit->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&tp))) || !tp) {
+    wprintf(L"Edit has no Text pattern\n"); return 5;
+  }
+  PrintSelection(tp, L"selection BEFORE");
+
+  IUIAutomationTextRange* doc = nullptr;
+  if (FAILED(tp->get_DocumentRange(&doc)) || !doc) { wprintf(L"no DocumentRange\n"); return 6; }
+  // Is the DocumentRange itself valid? GetText runs the same validation macro.
+  BSTR dtext = nullptr; HRESULT htext = doc->GetText(-1, &dtext);
+  wprintf(L"DocumentRange.GetText() hr=0x%08x text='%s'\n",
+          (unsigned)htext, (dtext && *dtext) ? dtext : L"<empty>");
+  if (dtext) SysFreeString(dtext);
+  HRESULT hr = doc->Select();          // client requests: select the whole text
+  wprintf(L"DocumentRange.Select() hr=0x%08x\n", (unsigned)hr);
+  doc->Release();
+
+  Sleep(800);                          // let the provider's STA apply kSetSelection
+  PrintSelection(tp, L"selection AFTER ");
+
+  tp->Release(); edit->Release(); if (walker) walker->Release();
+  root->Release(); uia->Release(); CoUninitialize();
+  return 0;
+}
