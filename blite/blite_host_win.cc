@@ -617,6 +617,24 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     ::InvalidateRect(hwnd_, nullptr, TRUE);
   }
 
+  // Keyboard handlers call RequestSync (cheap: just sets a flag) instead of
+  // ApplyLocalEdit directly. Firing UIA events from INSIDE a WM_CHAR/WM_KEYDOWN
+  // dispatch can stall the STA message loop (a UIA event raise re-enters the
+  // pump). FlushPendingSync runs the tree update + event firing at the message-
+  // loop level (after DispatchMessage returns), exactly like the scripted path.
+  void RequestSync(bool text_changed) {
+    pending_sync_ = true;
+    pending_text_changed_ = pending_text_changed_ || text_changed;
+  }
+  void FlushPendingSync() {
+    if (!pending_sync_)
+      return;
+    const bool text_changed = pending_text_changed_;
+    pending_sync_ = false;
+    pending_text_changed_ = false;
+    ApplyLocalEdit(text_changed);
+  }
+
   BliteNodeDelegate* DelegateFor(AXNodeID id) {
     auto it = delegates_.find(id);
     return it == delegates_.end() ? nullptr : it->second.get();
@@ -704,6 +722,8 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
   raw_ptr<AXTree> tree_;
   raw_ptr<MockCanvasEditor> editor_ = nullptr;  // for client-write actions
   raw_ptr<Bridge> bridge_ = nullptr;            // for client-write actions
+  bool pending_sync_ = false;          // a keystroke edit awaits loop-level sync
+  bool pending_text_changed_ = false;  // ...and whether the text (not just caret) changed
   std::unique_ptr<AXFragmentRootWin> fragment_root_;
   std::map<AXNodeID, std::unique_ptr<BliteNodeDelegate>> delegates_;
 };
@@ -907,18 +927,29 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
       EndPaint(hwnd, &ps);
       return 0;
     }
+    case WM_LBUTTONDOWN:
+      ::SetFocus(hwnd);  // clicking the window grabs keyboard focus (fallback)
+      return 0;
+    // PATTERN (load-bearing): keyboard handlers do the CHEAP, input-thread-safe
+    // work inline -- mutate the editor model and InvalidateRect (repaint) -- but
+    // DEFER the accessibility work (tree re-serialize + UIA event firing) via
+    // RequestSync. Firing a UIA event from inside a WM_CHAR/WM_KEYDOWN dispatch
+    // re-enters the STA message pump and HANGS the window. The deferred work runs
+    // at the message-loop level (FlushPendingSync, after DispatchMessage), which
+    // is the only safe place for it -- Chromium's AXTree/UIA are UI-thread-affine
+    // (sequence-checked), so this stays on the UI thread but OFF the input
+    // dispatch's critical path. Do not call ApplyLocalEdit directly from a
+    // WndProc message handler.
     case WM_CHAR:
-      // Printable keystroke -> insert at the caret, then drive the same
-      // pixels<->a11y pipeline (rebuild tree, fire UIA events, repaint).
       if (g_host && g_host->editor() && wparam >= 0x20 && wparam < 0x7f) {
         g_host->editor()->InsertText(std::string(1, static_cast<char>(wparam)));
-        g_host->ApplyLocalEdit(/*text_changed=*/true);
+        g_host->RequestSync(/*text_changed=*/true);  // a11y work -> loop level
+        ::InvalidateRect(hwnd, nullptr, TRUE);        // visual now (cheap)
         return 0;
       }
       break;
     case WM_KEYDOWN:
-      // Editing/navigation keys. Backspace/Delete change text; arrows/Home/End
-      // are pure caret moves (selection-changed only).
+      // Backspace/Delete change text; arrows/Home/End are pure caret moves.
       if (g_host && g_host->editor()) {
         MockCanvasEditor* ed = g_host->editor();
         bool handled = true, text_changed = false;
@@ -932,7 +963,8 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
           default: handled = false; break;
         }
         if (handled) {
-          g_host->ApplyLocalEdit(text_changed);
+          g_host->RequestSync(text_changed);     // a11y work -> loop level
+          ::InvalidateRect(hwnd, nullptr, TRUE);  // visual now (cheap)
           return 0;
         }
       }
@@ -1066,16 +1098,46 @@ int Run() {
   // scripted auto-edit that the probe / NVDA capture runs depend on.
   const bool viewer = ::wcsstr(::GetCommandLineW(), L"--viewer") != nullptr;
   if (viewer) {
+    // Reliably make our window the FOREGROUND + active + keyboard-focused window.
+    // SetForegroundWindow alone is unreliable (Windows foreground lock), so
+    // attach to the current foreground thread's input queue first -- the standard
+    // trick. Without real keyboard focus, WM_CHAR never arrives and you can't type.
+    ::ShowWindow(hwnd, SW_SHOW);
+    HWND fg = ::GetForegroundWindow();
+    DWORD fg_thread = fg ? ::GetWindowThreadProcessId(fg, nullptr) : 0;
+    DWORD my_thread = ::GetCurrentThreadId();
+    if (fg_thread && fg_thread != my_thread)
+      ::AttachThreadInput(my_thread, fg_thread, TRUE);
+    ::BringWindowToTop(hwnd);
+    ::SetForegroundWindow(hwnd);
+    ::SetActiveWindow(hwnd);
+    ::SetFocus(hwnd);
+    if (fg_thread && fg_thread != my_thread)
+      ::AttachThreadInput(my_thread, fg_thread, FALSE);
+
     if (AXPlatformNode* f = host.PlatformNodeFor(kField))
       f->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
-    ::SetFocus(hwnd);
     ::InvalidateRect(hwnd, nullptr, TRUE);
     std::cout << "VIEWER mode: type into the window (Backspace/Delete/arrows/"
                  "Home/End work); close the window to exit.\n";
-    MSG msg;
-    while (::GetMessage(&msg, nullptr, 0, 0) > 0) {
-      ::TranslateMessage(&msg);
-      ::DispatchMessage(&msg);
+    // Use a NON-BLOCKING PeekMessage pump (the same shape as the scripted
+    // pump_for that keeps the UIA provider responsive), NOT a blocking
+    // GetMessage. A blocking GetMessage interleaved with Chromium's UI message
+    // pump + real keyboard input wedged the STA. Apply the deferred a11y work
+    // once per drained batch, at loop level (off the WndProc dispatch).
+    bool running = true;
+    while (running) {
+      MSG msg;
+      while (::PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        if (msg.message == WM_QUIT) {
+          running = false;
+          break;
+        }
+        ::TranslateMessage(&msg);
+        ::DispatchMessage(&msg);
+      }
+      host.FlushPendingSync();  // see PATTERN note in BliteWndProc
+      ::Sleep(10);
     }
     g_host = nullptr;
     std::cout << "\n=== B-lite Windows host exited (viewer) ===\n";
