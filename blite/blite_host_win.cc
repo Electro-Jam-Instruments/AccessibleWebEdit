@@ -131,6 +131,32 @@ class MockCanvasEditor {
     caret_ = static_cast<int>(text_.size());
   }
 
+  // Keyboard editing ops (for the interactive --viewer mode). Each returns true
+  // if the TEXT changed (vs. a pure caret move), so the host fires the right
+  // UIA events.
+  bool Backspace() {
+    if (caret_ <= 0)
+      return false;
+    text_.erase(caret_ - 1, 1);
+    --caret_;
+    return true;
+  }
+  bool DeleteForward() {
+    if (caret_ >= static_cast<int>(text_.size()))
+      return false;
+    text_.erase(caret_, 1);
+    return true;
+  }
+  void MoveCaret(int delta) {
+    caret_ += delta;
+    if (caret_ < 0)
+      caret_ = 0;
+    if (caret_ > static_cast<int>(text_.size()))
+      caret_ = static_cast<int>(text_.size());
+  }
+  void CaretHome() { caret_ = 0; }
+  void CaretEnd() { caret_ = static_cast<int>(text_.size()); }
+
   // Run formatting (mock: applies to the whole text). A real editor would carry
   // per-run styles; this is enough to exercise UIA text attributes + changes.
   bool bold() const { return bold_; }
@@ -571,6 +597,26 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     return true;
   }
 
+  // Apply a LOCAL keyboard edit (the editor was already mutated by the WndProc):
+  // re-serialize, fire UIA events (text+value only when the text changed,
+  // selection always), and repaint. Same pixels<->a11y pipeline as the scripted
+  // edit, driven live by typing.
+  void ApplyLocalEdit(bool text_changed) {
+    if (!editor_ || !bridge_ || !tree_)
+      return;
+    AXTreeUpdate delta = bridge_->BuildEditDelta(*editor_, tree_);
+    if (!tree_->Unserialize(delta))
+      return;
+    if (AXPlatformNode* field = PlatformNodeFor(kField)) {
+      if (text_changed) {
+        field->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged);
+        field->NotifyAccessibilityEvent(ax::mojom::Event::kValueChanged);
+      }
+      field->NotifyAccessibilityEvent(ax::mojom::Event::kTextSelectionChanged);
+    }
+    ::InvalidateRect(hwnd_, nullptr, TRUE);
+  }
+
   BliteNodeDelegate* DelegateFor(AXNodeID id) {
     auto it = delegates_.find(id);
     return it == delegates_.end() ? nullptr : it->second.get();
@@ -861,6 +907,36 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
       EndPaint(hwnd, &ps);
       return 0;
     }
+    case WM_CHAR:
+      // Printable keystroke -> insert at the caret, then drive the same
+      // pixels<->a11y pipeline (rebuild tree, fire UIA events, repaint).
+      if (g_host && g_host->editor() && wparam >= 0x20 && wparam < 0x7f) {
+        g_host->editor()->InsertText(std::string(1, static_cast<char>(wparam)));
+        g_host->ApplyLocalEdit(/*text_changed=*/true);
+        return 0;
+      }
+      break;
+    case WM_KEYDOWN:
+      // Editing/navigation keys. Backspace/Delete change text; arrows/Home/End
+      // are pure caret moves (selection-changed only).
+      if (g_host && g_host->editor()) {
+        MockCanvasEditor* ed = g_host->editor();
+        bool handled = true, text_changed = false;
+        switch (wparam) {
+          case VK_BACK: text_changed = ed->Backspace(); break;
+          case VK_DELETE: text_changed = ed->DeleteForward(); break;
+          case VK_LEFT: ed->MoveCaret(-1); break;
+          case VK_RIGHT: ed->MoveCaret(1); break;
+          case VK_HOME: ed->CaretHome(); break;
+          case VK_END: ed->CaretEnd(); break;
+          default: handled = false; break;
+        }
+        if (handled) {
+          g_host->ApplyLocalEdit(text_changed);
+          return 0;
+        }
+      }
+      break;
     case WM_DESTROY:
       PostQuitMessage(0);
       return 0;
@@ -984,6 +1060,28 @@ int Run() {
   ::SetFocus(hwnd);
   std::cout << "host window up; UIA provider resolvable from HWND.\n";
 
+  // Interactive viewer: focus the field and let the user TYPE. The WndProc
+  // (WM_CHAR / WM_KEYDOWN) drives the editor -> repaint + UIA events, so the
+  // painted caret and the UIA caret move together as you type. This skips the
+  // scripted auto-edit that the probe / NVDA capture runs depend on.
+  const bool viewer = ::wcsstr(::GetCommandLineW(), L"--viewer") != nullptr;
+  if (viewer) {
+    if (AXPlatformNode* f = host.PlatformNodeFor(kField))
+      f->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
+    ::SetFocus(hwnd);
+    ::InvalidateRect(hwnd, nullptr, TRUE);
+    std::cout << "VIEWER mode: type into the window (Backspace/Delete/arrows/"
+                 "Home/End work); close the window to exit.\n";
+    MSG msg;
+    while (::GetMessage(&msg, nullptr, 0, 0) > 0) {
+      ::TranslateMessage(&msg);
+      ::DispatchMessage(&msg);
+    }
+    g_host = nullptr;
+    std::cout << "\n=== B-lite Windows host exited (viewer) ===\n";
+    return 0;
+  }
+
   // A helper that pumps the Win32 message queue for `ms` ms so the provider's
   // STA stays responsive while NVDA attaches/queries.
   auto pump_for = [](DWORD ms) {
@@ -1040,22 +1138,11 @@ int Run() {
   FirePlatformEditEvents(&host);
   ::InvalidateRect(hwnd, nullptr, TRUE);  // repaint with the edited text/caret
 
-  // 5. Either stay open for a human to look at (--viewer: run a normal message
-  //    loop until the window is closed), or self-exit after ~12s (the default,
-  //    so autonomous probe/NVDA capture leaves no orphan window).
-  const bool viewer = ::wcsstr(::GetCommandLineW(), L"--viewer") != nullptr;
-  if (viewer) {
-    std::cout << "\nedit fired; VIEWER mode -- window stays open, close it to "
-                 "exit.\n";
-    MSG msg;
-    while (::GetMessage(&msg, nullptr, 0, 0) > 0) {
-      ::TranslateMessage(&msg);
-      ::DispatchMessage(&msg);
-    }
-  } else {
-    std::cout << "\nedit fired; pumping ~12s for NVDA to announce, then exit.\n";
-    pump_for(12000);
-  }
+  // 5. Keep pumping so NVDA can process + announce the events, then self-exit
+  //    (the scripted/non-viewer path; --viewer returned earlier into its own
+  //    interactive loop). ~12s is ample for NVDA to coalesce + speak.
+  std::cout << "\nedit fired; pumping ~12s for NVDA to announce, then exit.\n";
+  pump_for(12000);
 
   g_host = nullptr;
   std::cout << "\n=== B-lite Windows host exited ===\n";
