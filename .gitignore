@@ -30,3 +30,13 @@ Thumbs.db
 # Scratch
 /scratch/
 *.tmp
+
+# Transient build/run logs, completion markers, and autonomous-loop state
+*.log
+*.done
+.loop-count
+.awaiting-build
+STOP-LOOP
+
+# Claude Code local config / locks
+.claude/

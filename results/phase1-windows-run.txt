@@ -1,0 +1,536 @@
+﻿AccessibleWebEdit -- Phase 1 canonical run on Windows (tag 149.0.7827.115)
+Date: 2026-06-25.  Host: local Win11 (SAC disabled).  Target: ax_t2_unittests (out\rel, component, ax_t2_minimal).
+Command: out\rel\ax_t2_unittests.exe --gtest_filter=AX*   ->   exit 0, SUCCESS, all tests passed.
+This closes V10 (zero-deviation canonical run) and the Windows half of the 109-test proof.
+--------------------------------------------------------------------------------
+
+IMPORTANT DEBUGGING NOTE: batches of tests are run inside their
+own process. For debugging a test inside a debugger, use the
+--gtest_filter=<your_test_name> flag along with
+--single-process-tests.
+Using sharding settings from environment. This is shard 0/1
+Using 1 parallel jobs.
+Note: Google Test filter = AXEventGeneratorT2Test.T2_1_CharacterInsert:AXEventGeneratorT2Test.T2_1_WordDelete:AXEventGeneratorT2Test.T2_1_AutocorrectReplacement:AXEventGeneratorT2Test.T2_2_NoTextFieldAncestor:AXEventGeneratorT2Test.T2_2b_RoleDroppedKeepsEditableSuppresses:AXEventGeneratorT2Test.T2_2c_RoleKeptNoEditableStillFires:AXEventGeneratorT2Test.T2_3_SelectionViaTreeData:AXEventGeneratorT2Test.T2_3_CaretBoundsAttribute:AXEventGeneratorT2Test.T2_5_AtomicNodeReplacementWithSelection:AXEventGeneratorTest.IterateThroughEmptyEventSets
+[==========] Running 10 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from AXEventGeneratorT2Test
+[ RUN      ] AXEventGeneratorT2Test.T2_1_CharacterInsert
+T2-LOG [T2-1 character insert] 3 event(s)
+T2-LOG   editableTextChanged on node 2
+T2-LOG   nameChanged on node 3
+T2-LOG   valueInTextFieldChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_1_CharacterInsert (9 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_1_WordDelete
+T2-LOG [T2-1 word delete] 3 event(s)
+T2-LOG   childrenChanged on node 2
+T2-LOG   editableTextChanged on node 2
+T2-LOG   valueInTextFieldChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_1_WordDelete (0 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_1_AutocorrectReplacement
+T2-LOG [T2-1 autocorrect replacement (atomic)] 5 event(s)
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   editableTextChanged on node 2
+T2-LOG   nameChanged on node 3
+T2-LOG   textSelectionChanged on node 2
+T2-LOG   valueInTextFieldChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_1_AutocorrectReplacement (0 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_2_NoTextFieldAncestor
+T2-LOG [T2-2 no text-field ancestor] 1 event(s)
+T2-LOG   nameChanged on node 3
+[       OK ] AXEventGeneratorT2Test.T2_2_NoTextFieldAncestor (0 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_2b_RoleDroppedKeepsEditableSuppresses
+T2-LOG [T2-2b role dropped, kEditable kept] 1 event(s)
+T2-LOG   nameChanged on node 3
+[       OK ] AXEventGeneratorT2Test.T2_2b_RoleDroppedKeepsEditableSuppresses (0 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_2c_RoleKeptNoEditableStillFires
+T2-LOG [T2-2c role kept (kTextField), kEditable dropped] 3 event(s)
+T2-LOG   editableTextChanged on node 2
+T2-LOG   nameChanged on node 3
+T2-LOG   valueInTextFieldChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_2c_RoleKeptNoEditableStillFires (0 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_3_SelectionViaTreeData
+T2-LOG [T2-3 caret move (collapsed)] 2 event(s)
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   textSelectionChanged on node 2
+T2-LOG [T2-3 forward range selection] 2 event(s)
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   textSelectionChanged on node 2
+T2-LOG [T2-3 backward range selection] 2 event(s)
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   textSelectionChanged on node 2
+T2-LOG [T2-3 affinity-only change] 2 event(s)
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   textSelectionChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_3_SelectionViaTreeData (1 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_3_CaretBoundsAttribute
+T2-LOG [T2-3 caret bounds via kCaretBounds attribute] 1 event(s)
+T2-LOG   caretBoundsChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_3_CaretBoundsAttribute (0 ms)
+[ RUN      ] AXEventGeneratorT2Test.T2_5_AtomicNodeReplacementWithSelection
+T2-LOG [T2-5 atomic node replacement + selection] 6 event(s)
+T2-LOG   childrenChanged on node 2
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   editableTextChanged on node 2
+T2-LOG   subtreeCreated on node 5
+T2-LOG   textSelectionChanged on node 2
+T2-LOG   valueInTextFieldChanged on node 2
+[       OK ] AXEventGeneratorT2Test.T2_5_AtomicNodeReplacementWithSelection (0 ms)
+[----------] 9 tests from AXEventGeneratorT2Test (98 ms total)
+
+[----------] 1 test from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.IterateThroughEmptyEventSets
+[       OK ] AXEventGeneratorTest.IterateThroughEmptyEventSets (0 ms)
+[----------] 1 test from AXEventGeneratorTest (2 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 2 test suites ran. (108 ms total)
+[  PASSED  ] 10 tests.
+[1/109] AXEventGeneratorT2Test.T2_1_CharacterInsert (9 ms)
+[2/109] AXEventGeneratorT2Test.T2_1_WordDelete (0 ms)
+[3/109] AXEventGeneratorT2Test.T2_1_AutocorrectReplacement (0 ms)
+[4/109] AXEventGeneratorT2Test.T2_2_NoTextFieldAncestor (0 ms)
+[5/109] AXEventGeneratorT2Test.T2_2b_RoleDroppedKeepsEditableSuppresses (0 ms)
+[6/109] AXEventGeneratorT2Test.T2_2c_RoleKeptNoEditableStillFires (0 ms)
+[7/109] AXEventGeneratorT2Test.T2_3_SelectionViaTreeData (1 ms)
+[8/109] AXEventGeneratorT2Test.T2_3_CaretBoundsAttribute (0 ms)
+[9/109] AXEventGeneratorT2Test.T2_5_AtomicNodeReplacementWithSelection (0 ms)
+[10/109] AXEventGeneratorTest.IterateThroughEmptyEventSets (0 ms)
+Note: Google Test filter = AXEventGeneratorTest.DocumentSelectionChanged:AXEventGeneratorTest.DocumentTitleChanged:AXEventGeneratorTest.ExpandedAndRowCount:AXEventGeneratorTest.SelectedAndSelectedChildren:AXEventGeneratorTest.SelectedAndSelectedValueChanged:AXEventGeneratorTest.SelectionInTextFieldChanged:AXEventGeneratorTest.ValueInTextFieldChanged:AXEventGeneratorTest.FloatValueChanged:AXEventGeneratorTest.InvalidStatusChanged:AXEventGeneratorTest.AddLiveRegionAttribute
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.DocumentSelectionChanged
+[       OK ] AXEventGeneratorTest.DocumentSelectionChanged (2 ms)
+[ RUN      ] AXEventGeneratorTest.DocumentTitleChanged
+[       OK ] AXEventGeneratorTest.DocumentTitleChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.ExpandedAndRowCount
+[       OK ] AXEventGeneratorTest.ExpandedAndRowCount (1 ms)
+[ RUN      ] AXEventGeneratorTest.SelectedAndSelectedChildren
+[       OK ] AXEventGeneratorTest.SelectedAndSelectedChildren (1 ms)
+[ RUN      ] AXEventGeneratorTest.SelectedAndSelectedValueChanged
+[       OK ] AXEventGeneratorTest.SelectedAndSelectedValueChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.SelectionInTextFieldChanged
+[       OK ] AXEventGeneratorTest.SelectionInTextFieldChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.ValueInTextFieldChanged
+[       OK ] AXEventGeneratorTest.ValueInTextFieldChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.FloatValueChanged
+[       OK ] AXEventGeneratorTest.FloatValueChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.InvalidStatusChanged
+[       OK ] AXEventGeneratorTest.InvalidStatusChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.AddLiveRegionAttribute
+[       OK ] AXEventGeneratorTest.AddLiveRegionAttribute (0 ms)
+[----------] 10 tests from AXEventGeneratorTest (62 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (66 ms total)
+[  PASSED  ] 10 tests.
+[11/109] AXEventGeneratorTest.DocumentSelectionChanged (2 ms)
+[12/109] AXEventGeneratorTest.DocumentTitleChanged (0 ms)
+[13/109] AXEventGeneratorTest.ExpandedAndRowCount (1 ms)
+[14/109] AXEventGeneratorTest.SelectedAndSelectedChildren (1 ms)
+[15/109] AXEventGeneratorTest.SelectedAndSelectedValueChanged (1 ms)
+[16/109] AXEventGeneratorTest.SelectionInTextFieldChanged (0 ms)
+[17/109] AXEventGeneratorTest.ValueInTextFieldChanged (0 ms)
+[18/109] AXEventGeneratorTest.FloatValueChanged (0 ms)
+[19/109] AXEventGeneratorTest.InvalidStatusChanged (0 ms)
+[20/109] AXEventGeneratorTest.AddLiveRegionAttribute (0 ms)
+Note: Google Test filter = AXEventGeneratorTest.CheckedStateChanged:AXEventGeneratorTest.ActiveDescendantChanged:AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelection:AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelectionIndirect:AXEventGeneratorTest.CreateAlertAndLiveRegion:AXEventGeneratorTest.AlertBecomingUnignored:AXEventGeneratorTest.LiveRegionChanged:AXEventGeneratorTest.LiveRegionOnlyTextChanges:AXEventGeneratorTest.BusyLiveRegionChanged:AXEventGeneratorTest.RemoveAriaLiveOffFromChild
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.CheckedStateChanged
+[       OK ] AXEventGeneratorTest.CheckedStateChanged (4 ms)
+[ RUN      ] AXEventGeneratorTest.ActiveDescendantChanged
+[       OK ] AXEventGeneratorTest.ActiveDescendantChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelection
+[       OK ] AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelection (2 ms)
+[ RUN      ] AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelectionIndirect
+[       OK ] AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelectionIndirect (1 ms)
+[ RUN      ] AXEventGeneratorTest.CreateAlertAndLiveRegion
+[       OK ] AXEventGeneratorTest.CreateAlertAndLiveRegion (1 ms)
+[ RUN      ] AXEventGeneratorTest.AlertBecomingUnignored
+[       OK ] AXEventGeneratorTest.AlertBecomingUnignored (2 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionChanged
+[       OK ] AXEventGeneratorTest.LiveRegionChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionOnlyTextChanges
+[       OK ] AXEventGeneratorTest.LiveRegionOnlyTextChanges (1 ms)
+[ RUN      ] AXEventGeneratorTest.BusyLiveRegionChanged
+[       OK ] AXEventGeneratorTest.BusyLiveRegionChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.RemoveAriaLiveOffFromChild
+[       OK ] AXEventGeneratorTest.RemoveAriaLiveOffFromChild (1 ms)
+[----------] 10 tests from AXEventGeneratorTest (94 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (99 ms total)
+[  PASSED  ] 10 tests.
+[21/109] AXEventGeneratorTest.CheckedStateChanged (4 ms)
+[22/109] AXEventGeneratorTest.ActiveDescendantChanged (1 ms)
+[23/109] AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelection (2 ms)
+[24/109] AXEventGeneratorTest.ActiveDescendantChangedAndNewNodeSelectionIndirect (1 ms)
+[25/109] AXEventGeneratorTest.CreateAlertAndLiveRegion (1 ms)
+[26/109] AXEventGeneratorTest.AlertBecomingUnignored (2 ms)
+[27/109] AXEventGeneratorTest.LiveRegionChanged (1 ms)
+[28/109] AXEventGeneratorTest.LiveRegionOnlyTextChanges (1 ms)
+[29/109] AXEventGeneratorTest.BusyLiveRegionChanged (1 ms)
+[30/109] AXEventGeneratorTest.RemoveAriaLiveOffFromChild (1 ms)
+Note: Google Test filter = AXEventGeneratorTest.AddChild:AXEventGeneratorTest.RemoveChild:AXEventGeneratorTest.ReorderChildren:AXEventGeneratorTest.ScrollHorizontalPositionChanged:AXEventGeneratorTest.ScrollVerticalPositionChanged:AXEventGeneratorTest.TextAttributeChanged:AXEventGeneratorTest.ObjectAttributeChanged:AXEventGeneratorTest.OtherAttributeChanged:AXEventGeneratorTest.NameChanged:AXEventGeneratorTest.DescriptionChanged
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.AddChild
+[       OK ] AXEventGeneratorTest.AddChild (3 ms)
+[ RUN      ] AXEventGeneratorTest.RemoveChild
+[       OK ] AXEventGeneratorTest.RemoveChild (1 ms)
+[ RUN      ] AXEventGeneratorTest.ReorderChildren
+[       OK ] AXEventGeneratorTest.ReorderChildren (1 ms)
+[ RUN      ] AXEventGeneratorTest.ScrollHorizontalPositionChanged
+[       OK ] AXEventGeneratorTest.ScrollHorizontalPositionChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.ScrollVerticalPositionChanged
+[       OK ] AXEventGeneratorTest.ScrollVerticalPositionChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.TextAttributeChanged
+[       OK ] AXEventGeneratorTest.TextAttributeChanged (3 ms)
+[ RUN      ] AXEventGeneratorTest.ObjectAttributeChanged
+[       OK ] AXEventGeneratorTest.ObjectAttributeChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.OtherAttributeChanged
+[       OK ] AXEventGeneratorTest.OtherAttributeChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.NameChanged
+[       OK ] AXEventGeneratorTest.NameChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.DescriptionChanged
+[       OK ] AXEventGeneratorTest.DescriptionChanged (0 ms)
+[----------] 10 tests from AXEventGeneratorTest (92 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (98 ms total)
+[  PASSED  ] 10 tests.
+[31/109] AXEventGeneratorTest.AddChild (3 ms)
+[32/109] AXEventGeneratorTest.RemoveChild (1 ms)
+[33/109] AXEventGeneratorTest.ReorderChildren (1 ms)
+[34/109] AXEventGeneratorTest.ScrollHorizontalPositionChanged (0 ms)
+[35/109] AXEventGeneratorTest.ScrollVerticalPositionChanged (1 ms)
+[36/109] AXEventGeneratorTest.TextAttributeChanged (3 ms)
+[37/109] AXEventGeneratorTest.ObjectAttributeChanged (1 ms)
+[38/109] AXEventGeneratorTest.OtherAttributeChanged (1 ms)
+[39/109] AXEventGeneratorTest.NameChanged (1 ms)
+[40/109] AXEventGeneratorTest.DescriptionChanged (0 ms)
+Note: Google Test filter = AXEventGeneratorTest.RoleChanged:AXEventGeneratorTest.MenuItemSelected:AXEventGeneratorTest.NodeBecomesIgnored:AXEventGeneratorTest.NodeBecomesIgnored2:AXEventGeneratorTest.NodeBecomesUnignored:AXEventGeneratorTest.NodeBecomesUnignored2:AXEventGeneratorTest.NodeInsertedViaRoleChange:AXEventGeneratorTest.NodeInserted:AXEventGeneratorTest.SubtreeBecomesUnignored:AXEventGeneratorTest.TwoNodesSwapIgnored
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.RoleChanged
+[       OK ] AXEventGeneratorTest.RoleChanged (3 ms)
+[ RUN      ] AXEventGeneratorTest.MenuItemSelected
+[       OK ] AXEventGeneratorTest.MenuItemSelected (1 ms)
+[ RUN      ] AXEventGeneratorTest.NodeBecomesIgnored
+[       OK ] AXEventGeneratorTest.NodeBecomesIgnored (1 ms)
+[ RUN      ] AXEventGeneratorTest.NodeBecomesIgnored2
+[       OK ] AXEventGeneratorTest.NodeBecomesIgnored2 (1 ms)
+[ RUN      ] AXEventGeneratorTest.NodeBecomesUnignored
+[       OK ] AXEventGeneratorTest.NodeBecomesUnignored (1 ms)
+[ RUN      ] AXEventGeneratorTest.NodeBecomesUnignored2
+[       OK ] AXEventGeneratorTest.NodeBecomesUnignored2 (1 ms)
+[ RUN      ] AXEventGeneratorTest.NodeInsertedViaRoleChange
+[       OK ] AXEventGeneratorTest.NodeInsertedViaRoleChange (1 ms)
+[ RUN      ] AXEventGeneratorTest.NodeInserted
+[       OK ] AXEventGeneratorTest.NodeInserted (1 ms)
+[ RUN      ] AXEventGeneratorTest.SubtreeBecomesUnignored
+[       OK ] AXEventGeneratorTest.SubtreeBecomesUnignored (1 ms)
+[ RUN      ] AXEventGeneratorTest.TwoNodesSwapIgnored
+[       OK ] AXEventGeneratorTest.TwoNodesSwapIgnored (1 ms)
+[----------] 10 tests from AXEventGeneratorTest (98 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (104 ms total)
+[  PASSED  ] 10 tests.
+[41/109] AXEventGeneratorTest.RoleChanged (3 ms)
+[42/109] AXEventGeneratorTest.MenuItemSelected (1 ms)
+[43/109] AXEventGeneratorTest.NodeBecomesIgnored (1 ms)
+[44/109] AXEventGeneratorTest.NodeBecomesIgnored2 (1 ms)
+[45/109] AXEventGeneratorTest.NodeBecomesUnignored (1 ms)
+[46/109] AXEventGeneratorTest.NodeBecomesUnignored2 (1 ms)
+[47/109] AXEventGeneratorTest.NodeInsertedViaRoleChange (1 ms)
+[48/109] AXEventGeneratorTest.NodeInserted (1 ms)
+[49/109] AXEventGeneratorTest.SubtreeBecomesUnignored (1 ms)
+[50/109] AXEventGeneratorTest.TwoNodesSwapIgnored (1 ms)
+Note: Google Test filter = AXEventGeneratorTest.TwoNodesSwapIgnored2:AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly2:AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly8:AXEventGeneratorTest.ActiveDescendantChangeOnDescendant:AXEventGeneratorTest.ImageAnnotationChanged:AXEventGeneratorTest.ImageAnnotationStatusChanged:AXEventGeneratorTest.StringPropertyChanges:AXEventGeneratorTest.IntPropertyChanges:AXEventGeneratorTest.IntListPropertyChanges:AXEventGeneratorTest.AriaBusyChanged
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.TwoNodesSwapIgnored2
+[       OK ] AXEventGeneratorTest.TwoNodesSwapIgnored2 (3 ms)
+[ RUN      ] AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly2
+[       OK ] AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly2 (1 ms)
+[ RUN      ] AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly8
+[       OK ] AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly8 (1 ms)
+[ RUN      ] AXEventGeneratorTest.ActiveDescendantChangeOnDescendant
+[       OK ] AXEventGeneratorTest.ActiveDescendantChangeOnDescendant (1 ms)
+[ RUN      ] AXEventGeneratorTest.ImageAnnotationChanged
+[       OK ] AXEventGeneratorTest.ImageAnnotationChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.ImageAnnotationStatusChanged
+[       OK ] AXEventGeneratorTest.ImageAnnotationStatusChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.StringPropertyChanges
+[       OK ] AXEventGeneratorTest.StringPropertyChanges (0 ms)
+[ RUN      ] AXEventGeneratorTest.IntPropertyChanges
+[       OK ] AXEventGeneratorTest.IntPropertyChanges (0 ms)
+[ RUN      ] AXEventGeneratorTest.IntListPropertyChanges
+[       OK ] AXEventGeneratorTest.IntListPropertyChanges (0 ms)
+[ RUN      ] AXEventGeneratorTest.AriaBusyChanged
+[       OK ] AXEventGeneratorTest.AriaBusyChanged (0 ms)
+[----------] 10 tests from AXEventGeneratorTest (75 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (80 ms total)
+[  PASSED  ] 10 tests.
+[51/109] AXEventGeneratorTest.TwoNodesSwapIgnored2 (3 ms)
+[52/109] AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly2 (1 ms)
+[53/109] AXEventGeneratorTest.IgnoredChangedFiredOnAncestorOnly8 (1 ms)
+[54/109] AXEventGeneratorTest.ActiveDescendantChangeOnDescendant (1 ms)
+[55/109] AXEventGeneratorTest.ImageAnnotationChanged (0 ms)
+[56/109] AXEventGeneratorTest.ImageAnnotationStatusChanged (0 ms)
+[57/109] AXEventGeneratorTest.StringPropertyChanges (0 ms)
+[58/109] AXEventGeneratorTest.IntPropertyChanges (0 ms)
+[59/109] AXEventGeneratorTest.IntListPropertyChanges (0 ms)
+[60/109] AXEventGeneratorTest.AriaBusyChanged (0 ms)
+Note: Google Test filter = AXEventGeneratorTest.MultiselectableStateChanged:AXEventGeneratorTest.RequiredStateChanged:AXEventGeneratorTest.FlowToChanged:AXEventGeneratorTest.ControlsChanged:AXEventGeneratorTest.AtomicChanged:AXEventGeneratorTest.HasPopupChanged:AXEventGeneratorTest.LiveRelevantChanged:AXEventGeneratorTest.MultilineStateChanged:AXEventGeneratorTest.EditableTextChanged:AXEventGeneratorTest.CheckedStateDescriptionChanged
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.MultiselectableStateChanged
+[       OK ] AXEventGeneratorTest.MultiselectableStateChanged (2 ms)
+[ RUN      ] AXEventGeneratorTest.RequiredStateChanged
+[       OK ] AXEventGeneratorTest.RequiredStateChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.FlowToChanged
+[       OK ] AXEventGeneratorTest.FlowToChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.ControlsChanged
+[       OK ] AXEventGeneratorTest.ControlsChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.AtomicChanged
+[       OK ] AXEventGeneratorTest.AtomicChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.HasPopupChanged
+[       OK ] AXEventGeneratorTest.HasPopupChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRelevantChanged
+[       OK ] AXEventGeneratorTest.LiveRelevantChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.MultilineStateChanged
+[       OK ] AXEventGeneratorTest.MultilineStateChanged (0 ms)
+[ RUN      ] AXEventGeneratorTest.EditableTextChanged
+[       OK ] AXEventGeneratorTest.EditableTextChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.CheckedStateDescriptionChanged
+[       OK ] AXEventGeneratorTest.CheckedStateDescriptionChanged (0 ms)
+[----------] 10 tests from AXEventGeneratorTest (60 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (64 ms total)
+[  PASSED  ] 10 tests.
+[61/109] AXEventGeneratorTest.MultiselectableStateChanged (2 ms)
+[62/109] AXEventGeneratorTest.RequiredStateChanged (0 ms)
+[63/109] AXEventGeneratorTest.FlowToChanged (1 ms)
+[64/109] AXEventGeneratorTest.ControlsChanged (0 ms)
+[65/109] AXEventGeneratorTest.AtomicChanged (0 ms)
+[66/109] AXEventGeneratorTest.HasPopupChanged (0 ms)
+[67/109] AXEventGeneratorTest.LiveRelevantChanged (0 ms)
+[68/109] AXEventGeneratorTest.MultilineStateChanged (0 ms)
+[69/109] AXEventGeneratorTest.EditableTextChanged (1 ms)
+[70/109] AXEventGeneratorTest.CheckedStateDescriptionChanged (0 ms)
+Note: Google Test filter = AXEventGeneratorTest.LiveRegionNodeRemovedNotRelevant:AXEventGeneratorTest.LiveRegionNodeRemovedAllRelevant:AXEventGeneratorTest.LiveRegionNodeRemovedAdditionsRelevant:AXEventGeneratorTest.LiveRegionNodeRemovedRemovalsRelevant:AXEventGeneratorTest.LiveRegionNodeReparentedAdditionsRelevant:AXEventGeneratorTest.LiveRegionRootRemoved:AXEventGeneratorTest.LiveRootsNested:AXEventGeneratorTest.LiveRootDescendantOfClearedNodeChanged:AXEventGeneratorTest.NoParentChangedOnIgnoredNode:AXEventGeneratorTest.ParentChangedOnIgnoredNodeFiresOnChildren
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.LiveRegionNodeRemovedNotRelevant
+[       OK ] AXEventGeneratorTest.LiveRegionNodeRemovedNotRelevant (2 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionNodeRemovedAllRelevant
+[       OK ] AXEventGeneratorTest.LiveRegionNodeRemovedAllRelevant (1 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionNodeRemovedAdditionsRelevant
+[       OK ] AXEventGeneratorTest.LiveRegionNodeRemovedAdditionsRelevant (0 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionNodeRemovedRemovalsRelevant
+[       OK ] AXEventGeneratorTest.LiveRegionNodeRemovedRemovalsRelevant (0 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionNodeReparentedAdditionsRelevant
+[       OK ] AXEventGeneratorTest.LiveRegionNodeReparentedAdditionsRelevant (2 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRegionRootRemoved
+[       OK ] AXEventGeneratorTest.LiveRegionRootRemoved (0 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRootsNested
+[       OK ] AXEventGeneratorTest.LiveRootsNested (0 ms)
+[ RUN      ] AXEventGeneratorTest.LiveRootDescendantOfClearedNodeChanged
+[       OK ] AXEventGeneratorTest.LiveRootDescendantOfClearedNodeChanged (1 ms)
+[ RUN      ] AXEventGeneratorTest.NoParentChangedOnIgnoredNode
+[       OK ] AXEventGeneratorTest.NoParentChangedOnIgnoredNode (1 ms)
+[ RUN      ] AXEventGeneratorTest.ParentChangedOnIgnoredNodeFiresOnChildren
+[       OK ] AXEventGeneratorTest.ParentChangedOnIgnoredNodeFiresOnChildren (1 ms)
+[----------] 10 tests from AXEventGeneratorTest (68 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (72 ms total)
+[  PASSED  ] 10 tests.
+[71/109] AXEventGeneratorTest.LiveRegionNodeRemovedNotRelevant (2 ms)
+[72/109] AXEventGeneratorTest.LiveRegionNodeRemovedAllRelevant (1 ms)
+[73/109] AXEventGeneratorTest.LiveRegionNodeRemovedAdditionsRelevant (0 ms)
+[74/109] AXEventGeneratorTest.LiveRegionNodeRemovedRemovalsRelevant (0 ms)
+[75/109] AXEventGeneratorTest.LiveRegionNodeReparentedAdditionsRelevant (2 ms)
+[76/109] AXEventGeneratorTest.LiveRegionRootRemoved (0 ms)
+[77/109] AXEventGeneratorTest.LiveRootsNested (0 ms)
+[78/109] AXEventGeneratorTest.LiveRootDescendantOfClearedNodeChanged (1 ms)
+[79/109] AXEventGeneratorTest.NoParentChangedOnIgnoredNode (1 ms)
+[80/109] AXEventGeneratorTest.ParentChangedOnIgnoredNodeFiresOnChildren (1 ms)
+Note: Google Test filter = AXEventGeneratorTest.InsertUnderIgnoredTest:AXEventGeneratorTest.ParseGeneratedEvent:AXEventGeneratorTest.UnignoredWithNodeCleared:AXEventGeneratorTest.SpellingMarkerAddedViaMarkerTypes:AXEventGeneratorTest.GrammarMarkerAddedViaMarkerTypes:AXEventGeneratorTest.SpellingAndGrammarMarkersAddedViaMarkerTypes:AXEventGeneratorTest.MarkerTypesRemovedNoSpecificEvent:AXEventGeneratorTest.MarkerTypeChangedAtExistingIndex:AXEventGeneratorTest.HighlightTypeSpellingErrorAdded:AXEventGeneratorTest.HighlightTypeGrammarErrorAdded
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.InsertUnderIgnoredTest
+[       OK ] AXEventGeneratorTest.InsertUnderIgnoredTest (8 ms)
+[ RUN      ] AXEventGeneratorTest.ParseGeneratedEvent
+[       OK ] AXEventGeneratorTest.ParseGeneratedEvent (0 ms)
+[ RUN      ] AXEventGeneratorTest.UnignoredWithNodeCleared
+[       OK ] AXEventGeneratorTest.UnignoredWithNodeCleared (1 ms)
+[ RUN      ] AXEventGeneratorTest.SpellingMarkerAddedViaMarkerTypes
+[       OK ] AXEventGeneratorTest.SpellingMarkerAddedViaMarkerTypes (1 ms)
+[ RUN      ] AXEventGeneratorTest.GrammarMarkerAddedViaMarkerTypes
+[       OK ] AXEventGeneratorTest.GrammarMarkerAddedViaMarkerTypes (1 ms)
+[ RUN      ] AXEventGeneratorTest.SpellingAndGrammarMarkersAddedViaMarkerTypes
+[       OK ] AXEventGeneratorTest.SpellingAndGrammarMarkersAddedViaMarkerTypes (1 ms)
+[ RUN      ] AXEventGeneratorTest.MarkerTypesRemovedNoSpecificEvent
+[       OK ] AXEventGeneratorTest.MarkerTypesRemovedNoSpecificEvent (0 ms)
+[ RUN      ] AXEventGeneratorTest.MarkerTypeChangedAtExistingIndex
+[       OK ] AXEventGeneratorTest.MarkerTypeChangedAtExistingIndex (1 ms)
+[ RUN      ] AXEventGeneratorTest.HighlightTypeSpellingErrorAdded
+[       OK ] AXEventGeneratorTest.HighlightTypeSpellingErrorAdded (1 ms)
+[ RUN      ] AXEventGeneratorTest.HighlightTypeGrammarErrorAdded
+[       OK ] AXEventGeneratorTest.HighlightTypeGrammarErrorAdded (1 ms)
+[----------] 10 tests from AXEventGeneratorTest (88 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (94 ms total)
+[  PASSED  ] 10 tests.
+[81/109] AXEventGeneratorTest.InsertUnderIgnoredTest (8 ms)
+[82/109] AXEventGeneratorTest.ParseGeneratedEvent (0 ms)
+[83/109] AXEventGeneratorTest.UnignoredWithNodeCleared (1 ms)
+[84/109] AXEventGeneratorTest.SpellingMarkerAddedViaMarkerTypes (1 ms)
+[85/109] AXEventGeneratorTest.GrammarMarkerAddedViaMarkerTypes (1 ms)
+[86/109] AXEventGeneratorTest.SpellingAndGrammarMarkersAddedViaMarkerTypes (1 ms)
+[87/109] AXEventGeneratorTest.MarkerTypesRemovedNoSpecificEvent (0 ms)
+[88/109] AXEventGeneratorTest.MarkerTypeChangedAtExistingIndex (1 ms)
+[89/109] AXEventGeneratorTest.HighlightTypeSpellingErrorAdded (1 ms)
+[90/109] AXEventGeneratorTest.HighlightTypeGrammarErrorAdded (1 ms)
+Note: Google Test filter = AXEventGeneratorTest.HighlightTypeHighlightAdded:AXEventGeneratorTest.HighlightTypesRemovedNoSpecificEvent:AXEventGeneratorTest.HighlightTypeChangedAtExistingIndex:AXEventGeneratorTest.MultipleHighlightTypesAdded:AXEventGeneratorTest.MarkerEventsOnTextFieldAncestor:AXEventGeneratorTest.MarkerEventsNoTargetNoEvent:AXEventGenerator.ParsingUnknownEvent:AXMatrixT2Test.T27_CellSelection_SingleAndDiscontiguous:AXMatrixT2Test.T27_TextToCellSelectionHandoff_Atomic:AXMatrixT2Test.Markers_SpellingAdded
+[==========] Running 10 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 6 tests from AXEventGeneratorTest
+[ RUN      ] AXEventGeneratorTest.HighlightTypeHighlightAdded
+[       OK ] AXEventGeneratorTest.HighlightTypeHighlightAdded (4 ms)
+[ RUN      ] AXEventGeneratorTest.HighlightTypesRemovedNoSpecificEvent
+[       OK ] AXEventGeneratorTest.HighlightTypesRemovedNoSpecificEvent (1 ms)
+[ RUN      ] AXEventGeneratorTest.HighlightTypeChangedAtExistingIndex
+[       OK ] AXEventGeneratorTest.HighlightTypeChangedAtExistingIndex (1 ms)
+[ RUN      ] AXEventGeneratorTest.MultipleHighlightTypesAdded
+[       OK ] AXEventGeneratorTest.MultipleHighlightTypesAdded (1 ms)
+[ RUN      ] AXEventGeneratorTest.MarkerEventsOnTextFieldAncestor
+[       OK ] AXEventGeneratorTest.MarkerEventsOnTextFieldAncestor (1 ms)
+[ RUN      ] AXEventGeneratorTest.MarkerEventsNoTargetNoEvent
+[       OK ] AXEventGeneratorTest.MarkerEventsNoTargetNoEvent (1 ms)
+[----------] 6 tests from AXEventGeneratorTest (83 ms total)
+
+[----------] 1 test from AXEventGenerator
+[ RUN      ] AXEventGenerator.ParsingUnknownEvent
+[       OK ] AXEventGenerator.ParsingUnknownEvent (0 ms)
+[----------] 1 test from AXEventGenerator (4 ms total)
+
+[----------] 3 tests from AXMatrixT2Test
+[ RUN      ] AXMatrixT2Test.T27_CellSelection_SingleAndDiscontiguous
+T2-LOG [T2-7 single cell selected] 3 event(s)
+T2-LOG   selectedChanged on node 4
+T2-LOG   selectedChildrenChanged on node 2
+T2-LOG   winIaccessibleStateChanged on node 4
+T2-LOG [T2-7 second cell selected (discontiguous)] 3 event(s)
+T2-LOG   selectedChanged on node 5
+T2-LOG   selectedChildrenChanged on node 2
+T2-LOG   winIaccessibleStateChanged on node 5
+[       OK ] AXMatrixT2Test.T27_CellSelection_SingleAndDiscontiguous (2 ms)
+[ RUN      ] AXMatrixT2Test.T27_TextToCellSelectionHandoff_Atomic
+T2-LOG [T2-7 atomic text-to-cell selection handoff] 4 event(s)
+T2-LOG   documentSelectionChanged on node 1
+T2-LOG   selectedChanged on node 4
+T2-LOG   selectedChildrenChanged on node 2
+T2-LOG   winIaccessibleStateChanged on node 4
+[       OK ] AXMatrixT2Test.T27_TextToCellSelectionHandoff_Atomic (1 ms)
+[ RUN      ] AXMatrixT2Test.Markers_SpellingAdded
+T2-LOG [matrix spelling marker added] 2 event(s)
+T2-LOG   spellingMarkerChanged on node 6
+T2-LOG   textAttributeChanged on node 6
+[       OK ] AXMatrixT2Test.Markers_SpellingAdded (1 ms)
+[----------] 3 tests from AXMatrixT2Test (17 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 3 test suites ran. (117 ms total)
+[  PASSED  ] 10 tests.
+[91/109] AXEventGeneratorTest.HighlightTypeHighlightAdded (4 ms)
+[92/109] AXEventGeneratorTest.HighlightTypesRemovedNoSpecificEvent (1 ms)
+[93/109] AXEventGeneratorTest.HighlightTypeChangedAtExistingIndex (1 ms)
+[94/109] AXEventGeneratorTest.MultipleHighlightTypesAdded (1 ms)
+[95/109] AXEventGeneratorTest.MarkerEventsOnTextFieldAncestor (1 ms)
+[96/109] AXEventGeneratorTest.MarkerEventsNoTargetNoEvent (1 ms)
+[97/109] AXEventGenerator.ParsingUnknownEvent (0 ms)
+[98/109] AXMatrixT2Test.T27_CellSelection_SingleAndDiscontiguous (2 ms)
+[99/109] AXMatrixT2Test.T27_TextToCellSelectionHandoff_Atomic (1 ms)
+[100/109] AXMatrixT2Test.Markers_SpellingAdded (1 ms)
+Note: Google Test filter = AXMatrixT2Test.FormatBold_RequiresRichlyEditable:AXMatrixT2Test.Sort_HeaderOnly:AXMatrixT2Test.Table_RowAddition_StructuralEventsOnly:AXMatrixT2Test.Checkbox_Toggle:AXMatrixT2Test.Progress_RangeValue:AXMatrixT2Test.ExpandCollapse_And_PosInSet:AXMatrixT2Test.Comment_DetailsRelation:AXMatrixT2Test.LiveRegion_Announcement:AXMatrixT2Test.Table_RowReorder
+[==========] Running 9 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 9 tests from AXMatrixT2Test
+[ RUN      ] AXMatrixT2Test.FormatBold_RequiresRichlyEditable
+T2-LOG [matrix bold applied (richly editable)] 1 event(s)
+T2-LOG   textAttributeChanged on node 7
+T2-LOG [matrix bold applied (NOT richly editable)] 0 event(s)
+[       OK ] AXMatrixT2Test.FormatBold_RequiresRichlyEditable (5 ms)
+[ RUN      ] AXMatrixT2Test.Sort_HeaderOnly
+T2-LOG [matrix sort direction on column header] 1 event(s)
+T2-LOG   sortChanged on node 4
+T2-LOG [matrix sort direction on plain cell (negative)] 0 event(s)
+[       OK ] AXMatrixT2Test.Sort_HeaderOnly (1 ms)
+[ RUN      ] AXMatrixT2Test.Table_RowAddition_StructuralEventsOnly
+T2-LOG [matrix row added] 2 event(s)
+T2-LOG   childrenChanged on node 2
+T2-LOG   subtreeCreated on node 6
+[       OK ] AXMatrixT2Test.Table_RowAddition_StructuralEventsOnly (1 ms)
+[ RUN      ] AXMatrixT2Test.Checkbox_Toggle
+T2-LOG [matrix checkbox toggled] 2 event(s)
+T2-LOG   checkedStateChanged on node 7
+T2-LOG   winIaccessibleStateChanged on node 7
+[       OK ] AXMatrixT2Test.Checkbox_Toggle (1 ms)
+[ RUN      ] AXMatrixT2Test.Progress_RangeValue
+T2-LOG [matrix progress value changed] 1 event(s)
+T2-LOG   rangeValueChanged on node 7
+[       OK ] AXMatrixT2Test.Progress_RangeValue (1 ms)
+[ RUN      ] AXMatrixT2Test.ExpandCollapse_And_PosInSet
+T2-LOG [matrix comment thread collapsed] 3 event(s)
+T2-LOG   collapsed on node 7
+T2-LOG   stateChanged on node 7
+T2-LOG   winIaccessibleStateChanged on node 7
+T2-LOG [matrix kanban pos-in-set changed] 1 event(s)
+T2-LOG   positionInSetChanged on node 7
+[       OK ] AXMatrixT2Test.ExpandCollapse_And_PosInSet (1 ms)
+[ RUN      ] AXMatrixT2Test.Comment_DetailsRelation
+T2-LOG [matrix comment details relation added] 1 event(s)
+T2-LOG   detailsChanged on node 5
+[       OK ] AXMatrixT2Test.Comment_DetailsRelation (1 ms)
+[ RUN      ] AXMatrixT2Test.LiveRegion_Announcement
+T2-LOG [matrix live region announcement] 3 event(s)
+T2-LOG   liveRegionChanged on node 2
+T2-LOG   liveRegionNodeChanged on node 3
+T2-LOG   nameChanged on node 3
+[       OK ] AXMatrixT2Test.LiveRegion_Announcement (1 ms)
+[ RUN      ] AXMatrixT2Test.Table_RowReorder
+T2-LOG [matrix row reorder] 1 event(s)
+T2-LOG   childrenChanged on node 2
+[       OK ] AXMatrixT2Test.Table_RowReorder (1 ms)
+[----------] 9 tests from AXMatrixT2Test (97 ms total)
+
+[----------] Global test environment tear-down
+[==========] 9 tests from 1 test suite ran. (103 ms total)
+[  PASSED  ] 9 tests.
+[101/109] AXMatrixT2Test.FormatBold_RequiresRichlyEditable (5 ms)
+[102/109] AXMatrixT2Test.Sort_HeaderOnly (1 ms)
+[103/109] AXMatrixT2Test.Table_RowAddition_StructuralEventsOnly (1 ms)
+[104/109] AXMatrixT2Test.Checkbox_Toggle (1 ms)
+[105/109] AXMatrixT2Test.Progress_RangeValue (1 ms)
+[106/109] AXMatrixT2Test.ExpandCollapse_And_PosInSet (1 ms)
+[107/109] AXMatrixT2Test.Comment_DetailsRelation (1 ms)
+[108/109] AXMatrixT2Test.LiveRegion_Announcement (1 ms)
+[109/109] AXMatrixT2Test.Table_RowReorder (1 ms)
+SUCCESS: all tests passed.
+Tests took 3 seconds.
