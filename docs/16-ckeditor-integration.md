@@ -53,7 +53,12 @@ tap it, run the engine without a browser, and shape the C++ side.
   `AXEventIntent`: insert→kInsert, attribute→kFormat, marker→kMarker — the
   optional intent channel of docs/09 Finding 1).
 
-### Idea 2 — Headless execution: drive the engine layer only
+### Idea 2 — Run the editor *engine* without its DOM (so our renderer can take over)
+
+> **"Headless" here means dropping the *editor's own* contentEditable rendering —
+> which we are replacing with our canvas — NOT dropping rendering.** We want the
+> editor's **model/state**; our layout + raster supply the pixels (Idea 5). This
+> is "headless editor," not "no pixels."
 
 - **No supported headless editor class** — issue #438 is closed *not planned*.
   Headless is DIY. **[SOURCE-EXT]**
@@ -104,20 +109,28 @@ tap it, run the engine without a browser, and shape the C++ side.
   where CKEditor's rich editing maps most cleanly to the AX scenarios.
 - *Caveat:* comments/track-changes are paid features (Idea 7).
 
-### Idea 5 — The layout gap (the real work; shared with Lexical)
+### Idea 5 — Our layout is the single source of truth (rendering runs *with* a11y from day one)
 
 - CK5 has **no pixel layout engine** — it borrows the browser's contentEditable
-  layout. **[SOURCE-EXT]** So the docs/14 "one layout → pixels + a11y geometry"
-  coupling needs the native shell to **own** layout (Skia `SkParagraph` /
-  DirectWrite).
-- **Idea — split the work by what's provable now vs VM-gated:**
-  - **Phase 1 (Linux, now):** emit a correct *semantic* AX tree — roles, text,
-    selection offsets — straight from the model feed, **no geometry**. Proves the
-    structured producer mapping end to end without a renderer.
-  - **Phase 2 (VM/Skia):** add the layout engine to supply `kCaretBounds`
-    geometry and the see-it/hear-it coupling.
-- This keeps the model-mapping (provable today) decoupled from geometry
-  (VM-gated), so CK progress isn't blocked on the Windows box.
+  layout, **which is exactly the rendering we are replacing**. **[SOURCE-EXT]** So
+  the integration is *not* "reuse the model and add a11y"; it is: **the editor
+  supplies the document model/state, and *our* layout engine is the single source
+  of truth feeding BOTH the painted pixels and the AX geometry from one pass**
+  (the docs/14 thesis). The editor's own layout is discarded.
+- **Consequence: rendering and a11y must run together from the first spike —
+  coupling them *is* the point, not a later phase.** (This corrects an earlier
+  draft that staged a geometry-free "Phase 1"; a no-pixels spike skips the one
+  thing this project exists to prove.)
+- **What changes by phase is layout *fidelity*, not whether pixels exist** — and
+  neither phase needs the VM to show the coupling:
+  - **Phase 1 (Linux, now):** a lean CPU **block** layout (extend the demo's
+    single-line `layout_engine.h` to multi-line/blocks) → CPU raster pixels (PPM,
+    like `demo_render`) **and** real AX geometry/events into a live `AXTree`
+    (like `demo_e2e`) — all from one `LayOut()` pass, driven by the rich model.
+    No window, GPU, or VM. This is "headless of a window," **with** real pixels.
+  - **Phase 2 (VM/Skia):** swap the lean layout for Skia `SkParagraph` +
+    DirectWrite for production text fidelity; the `LayOut() → {paint, AX}`
+    *contract* is unchanged. NVDA then closes the loop (docs/14 Stages 2–4).
 
 ### Idea 6 — JS↔C++ bridge, with an editor-agnostic delta schema
 
@@ -156,21 +169,34 @@ tap it, run the engine without a browser, and shape the C++ side.
 | R-CK4 | Rich scenarios are paid | Open exhibit = core editing; price a commercial license for comments/track-changes a11y. |
 | R-CK5 | TS→C++ marshalling cost (shared) | Sidecar + stable JSON delta schema (Idea 6). |
 
-## First spike (CKEditor)
+## First spike (CKEditor) — model swapped into the *coupled* demo, rendering included
 
-1. Node, **engine-only** (`@ckeditor/ckeditor5-engine`, no UI). Build a model
-   with paragraph/heading/list/table via the writer; run an edit script
-   analogous to `demo/core/demo_script.h`.
-2. On `change:data`, read `differ.getChanges()` (with the subtree walk) +
-   `model.document.selection`; emit the **unified JSON delta** (Idea 6).
-3. Feed it into the shared C++ translator → the existing
-   `demo/platform/linux_headless/demo_e2e.cc` AXTree (Linux); assert the
-   generated-event set.
+The spike is the existing `demo/` architecture with the document model swapped
+from the flat `TextDocument` to a CK5-backed model — so pixels **and** a11y run
+together from one layout, exactly as the product must.
+
+1. Run CK's model **engine-only** (`@ckeditor/ckeditor5-engine`, no UI/
+   contentEditable) to hold document state + deltas; build paragraph/heading/
+   list/table via the writer, run an edit script analogous to
+   `demo/core/demo_script.h`. On `change:data`, read `differ.getChanges()` (with
+   the subtree walk) + `model.document.selection`; emit the **unified JSON delta**
+   (Idea 6).
+2. Feed that delta into the demo core in place of `TextDocument`, and drive
+   **our** `LayOut()` so **one pass** produces *both* the CPU raster pixels (PPM
+   frames, like `demo_render`) **and** the AX geometry/events into the real
+   `AXTree` (like `demo_e2e`).
+3. Assert the painted pixels and `kCaretBounds` come from the **same** `Layout`
+   (the demo already checks this for the flat model) and that the generated-event
+   set matches.
+
+This runs together **on Linux today** — rendering + a11y from one layout, no VM.
+Skia/DirectWrite is the Phase-2 *fidelity* upgrade (Idea 5), not a prerequisite
+for the coupling.
 
 **Sequencing:** CK's headless friction (R-CK1) makes it the *second* spike. Run
 the **Lexical** spike first (docs/17 — `@lexical/headless` is turnkey) to prove
-the C++ translator + the unified JSON delta schema; CK then only needs the
-engine-only feed adapter onto that proven schema.
+the shared layout-swap + the unified JSON delta schema against the coupled demo;
+CK then only needs the engine-only feed adapter onto that proven schema.
 
 ## Status summary
 
