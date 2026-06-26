@@ -97,6 +97,15 @@ pattern verified separately):
 - docs/17 — A vs B vs C; read before choosing how geometry is sourced.
 - docs/03 §2 — selection/caret contract; §1 — node schema (roles).
 
+## DONE 2026-06-26 — Architecture A visuals landed (coupled to UIA)
+The B-lite UIA host (`blite/blite_host_win.cc`) now paints the editor AND exposes
+the same geometry through UIA from one `LayOut(editor)` pass. Verified through the
+native UIA client: the Edit's `get_CurrentBoundingRectangle`, the caret rect, and
+the selection rect all equal the painted location. Evidence + mechanics in
+`results/visuals-coupling.md` (+ screenshot `results/blite-rendered.png`). The
+items below (multi-line/block layout, per-line selection rects, DPI map, Skia
+swap, Architecture B's DOM read-back) remain.
+
 ## Open items / waiting on
 
 - **Architecture B is verified clean** (docs/17) — offscreen/composition hosting,

@@ -21,6 +21,7 @@ static void Dump(IUIAutomationTreeWalker* walker, IUIAutomationElement* el, int 
     }
     BOOL hasFocus = FALSE; child->get_CurrentHasKeyboardFocus(&hasFocus);
     BOOL focusable = FALSE; child->get_CurrentIsKeyboardFocusable(&focusable);
+    RECT bb = {0,0,0,0}; child->get_CurrentBoundingRectangle(&bb);
     BOOL hasText = FALSE; int selRanges = -1; BSTR selText = nullptr;
     IUIAutomationTextPattern* tp = nullptr;
     if (SUCCEEDED(child->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&tp))) && tp) {
@@ -36,9 +37,10 @@ static void Dump(IUIAutomationTreeWalker* walker, IUIAutomationElement* el, int 
       }
       tp->Release();
     }
-    wprintf(L"%*s- ctrlType=%d name='%s' value='%s' focus=%d focusable=%d textPat=%d selRanges=%d selText='%s'\n",
+    wprintf(L"%*s- ctrlType=%d name='%s' value='%s' focus=%d focusable=%d textPat=%d selRanges=%d selText='%s' bounds=[%d,%d %dx%d]\n",
             depth * 2, L"", ct, name ? name : L"", val ? val : L"", hasFocus, focusable, hasText,
-            selRanges, selText ? selText : L"");
+            selRanges, selText ? selText : L"",
+            bb.left, bb.top, bb.right - bb.left, bb.bottom - bb.top);
     if (selText) SysFreeString(selText);
     if (name) SysFreeString(name);
     if (cls) SysFreeString(cls);

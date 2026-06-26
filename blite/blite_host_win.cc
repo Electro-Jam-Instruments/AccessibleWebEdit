@@ -91,6 +91,7 @@
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/accessibility/platform/ax_platform_tree_manager.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace ui {
 namespace {
@@ -144,6 +145,48 @@ class MockCanvasEditor {
   bool italic_ = true;
   bool underline_ = true;
 };
+
+// ---------------------------------------------------------------------------
+// THE SINGLE LAYOUT PASS (docs/11 + docs/14 thesis): pure function of the
+// editor -> per-glyph rects + caret rect, in CLIENT pixels. The window paints
+// from this (WM_PAINT) AND the a11y bridge feeds the SAME caret rect to UIA as
+// kCaretBounds -- so the painted caret and the caret a screen reader announces
+// cannot drift. Monospace metrics here; a Skia/DirectWrite swap keeps the
+// contract. (Mirrors demo/core/layout_engine.h, adapted to MockCanvasEditor.)
+// ---------------------------------------------------------------------------
+struct Rect {
+  int x = 0, y = 0, w = 0, h = 0;
+};
+
+struct Metrics {
+  int origin_x = 12;
+  int origin_y = 16;
+  int advance = 14;  // per-glyph x step (monospace)
+  int cell_w = 12;
+  int cell_h = 22;
+};
+
+struct Layout {
+  std::vector<Rect> glyphs;  // bounds of each character cell (client px)
+  Rect caret;                // caret rect (client px)
+  int width = 0;
+  int height = 0;
+};
+
+inline Layout LayOut(const MockCanvasEditor& ed, const Metrics& m = Metrics{}) {
+  Layout out;
+  const int n = static_cast<int>(ed.text().size());
+  out.glyphs.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    out.glyphs.push_back(
+        Rect{m.origin_x + i * m.advance, m.origin_y, m.cell_w, m.cell_h});
+  }
+  out.caret = Rect{m.origin_x + ed.caret() * m.advance - 1, m.origin_y - 2, 2,
+                   m.cell_h + 4};
+  out.width = m.origin_x + n * m.advance + m.origin_x;
+  out.height = m.origin_y + m.cell_h + m.origin_y;
+  return out;
+}
 
 // Fill an inline-text-box leaf with the run's characters. The character offsets
 // (cumulative end-x per glyph) make it a real, position-addressable text leaf so
@@ -201,6 +244,12 @@ void FillFieldNode(AXNodeData& node, const MockCanvasEditor& editor) {
   node.SetValue(editor.text());  // pair Text with Value (MSDN)
   // Atomic text field: UIA reads run attributes from the field itself.
   FillRunAttributes(node, editor);
+  // Caret bounds from the SAME layout the window paints (docs/11/14 coupling):
+  // the painted caret and the caret a screen reader announces share one source.
+  const Layout lay = LayOut(editor);
+  node.AddIntListAttribute(
+      ax::mojom::IntListAttribute::kCaretBounds,
+      {lay.caret.x, lay.caret.y, lay.caret.w, lay.caret.h});
   node.child_ids = {kText};
 }
 
@@ -344,6 +393,21 @@ class BliteNodeDelegate : public AXPlatformNodeDelegate {
   // The tree's text selection -- the source GetSelection turns into the degenerate
   // caret range (the insertion point a screen reader tracks).
   const AXSelection GetUnignoredSelection() const override;
+  // The node's on-screen bounds, taken from the SAME layout the window paints
+  // (base returns an empty rect) -- so a UIA client reads element/caret bounds at
+  // the painted location. This is the pixels<->a11y geometry coupling.
+  gfx::Rect GetBoundsRect(AXCoordinateSystem coordinate_system,
+                          AXClippingBehavior clipping_behavior,
+                          AXOffscreenResult* offscreen_result) const override;
+  // Screen rect for a character sub-range [start,end) -- the per-character path
+  // UIA's ITextRangeProvider::GetBoundingRectangles uses (and the degenerate
+  // caret rect). From the same layout metrics the window paints. Base = empty.
+  gfx::Rect GetInnerTextRangeBoundsRect(
+      int start_offset,
+      int end_offset,
+      AXCoordinateSystem coordinate_system,
+      AXClippingBehavior clipping_behavior,
+      AXOffscreenResult* offscreen_result) const override;
   // Apply a client-initiated action (client->provider WRITE direction). Handles
   // kSetValue (IValueProvider::SetValue) by mutating the editor+tree; base returns
   // false (E_FAIL), so without this every client write is rejected.
@@ -416,6 +480,45 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     editor_ = editor;
     bridge_ = bridge;
   }
+  MockCanvasEditor* editor() const { return editor_; }  // for WM_PAINT
+
+  // A node's on-screen bounds (physical px) from the SAME layout the window
+  // paints: the text-content nodes get the text's bounding box; the root gets
+  // the client area. Client px -> screen via ClientToScreen.
+  gfx::Rect NodeScreenBounds(AXNodeID id) {
+    if (!editor_)
+      return gfx::Rect();
+    Metrics m;
+    const int n = static_cast<int>(editor_->text().size());
+    int cx = m.origin_x, cy = m.origin_y;
+    int cw = (n > 0 ? n * m.advance : m.advance);
+    int ch = m.cell_h;
+    if (id == kRoot) {
+      RECT cl;
+      ::GetClientRect(hwnd_, &cl);
+      cx = 0;
+      cy = 0;
+      cw = cl.right - cl.left;
+      ch = cl.bottom - cl.top;
+    }
+    POINT tl = {cx, cy};
+    ::ClientToScreen(hwnd_, &tl);
+    return gfx::Rect(tl.x, tl.y, cw, ch);
+  }
+
+  // Screen rect spanning characters [start,end) of the single run, from the same
+  // layout metrics. A degenerate range (start==end) returns width 0 -- AXRange
+  // itself widens that to a 1px caret bar (and DCHECKs width==0 first).
+  gfx::Rect InnerTextRangeScreenBounds(int start_offset, int end_offset) {
+    if (!editor_)
+      return gfx::Rect();
+    Metrics m;
+    int x = m.origin_x + start_offset * m.advance;
+    int w = (end_offset - start_offset) * m.advance;  // 0 for a degenerate caret
+    POINT tl = {x, m.origin_y};
+    ::ClientToScreen(hwnd_, &tl);
+    return gfx::Rect(tl.x, tl.y, w, m.cell_h);
+  }
 
   // Apply a client write (IValueProvider::SetValue): replace the editor buffer,
   // re-serialize the field value + static-text + caret as one atomic delta, then
@@ -434,6 +537,7 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     std::cout << "[host] client SetValue applied -> \"" << editor_->text()
               << "\"\n";
     FirePlatformEditEvents(this);
+    ::InvalidateRect(hwnd_, nullptr, TRUE);  // repaint the visual surface
     return true;
   }
 
@@ -462,6 +566,7 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
               << focus_offset << ")\n";
     if (AXPlatformNode* field = PlatformNodeFor(kField))
       field->NotifyAccessibilityEvent(ax::mojom::Event::kTextSelectionChanged);
+    ::InvalidateRect(hwnd_, nullptr, TRUE);  // repaint the visual surface
     return true;
   }
 
@@ -647,6 +752,31 @@ const AXSelection BliteNodeDelegate::GetUnignoredSelection() const {
   return host_->tree()->GetUnignoredSelection();
 }
 
+gfx::Rect BliteNodeDelegate::GetBoundsRect(
+    AXCoordinateSystem,
+    AXClippingBehavior,
+    AXOffscreenResult* offscreen_result) const {
+  // Physical screen px from the single layout pass (correct at 100% DPI; the
+  // coordinate-system arg is ignored for now). This makes a UIA client's
+  // get_BoundingRectangle land on the painted text.
+  if (offscreen_result)
+    *offscreen_result = AXOffscreenResult::kOnscreen;
+  return host_->NodeScreenBounds(node()->id());
+}
+
+gfx::Rect BliteNodeDelegate::GetInnerTextRangeBoundsRect(
+    int start_offset,
+    int end_offset,
+    AXCoordinateSystem,
+    AXClippingBehavior,
+    AXOffscreenResult* offscreen_result) const {
+  // Per-character span rect (and degenerate caret rect) from the layout metrics.
+  // Must report kOnscreen or AXRange::GetRects discards the rect.
+  if (offscreen_result)
+    *offscreen_result = AXOffscreenResult::kOnscreen;
+  return host_->InnerTextRangeScreenBounds(start_offset, end_offset);
+}
+
 bool BliteNodeDelegate::AccessibilityPerformAction(const AXActionData& data) {
   switch (data.action) {
     case ax::mojom::Action::kSetValue:
@@ -685,6 +815,46 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
           return result;
       }
       break;
+    case WM_PAINT: {
+      // The VISUAL half: paint the editor text + caret from the SAME single
+      // layout pass that feeds UIA kCaretBounds. Each glyph is drawn AT its
+      // layout x, so painted positions equal the layout (and thus the a11y)
+      // positions regardless of the font's own advance. The run's bold/italic/
+      // underline (also exposed via UIA attributes) drive the font here too.
+      PAINTSTRUCT ps;
+      HDC hdc = BeginPaint(hwnd, &ps);
+      RECT client;
+      GetClientRect(hwnd, &client);
+      FillRect(hdc, &client, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
+      if (g_host && g_host->editor()) {
+        const MockCanvasEditor& ed = *g_host->editor();
+        const Layout lay = LayOut(ed);
+        HFONT font = CreateFontW(
+            /*height=*/22, /*width=*/0, 0, 0,
+            ed.bold() ? FW_BOLD : FW_NORMAL, /*italic=*/ed.italic() ? TRUE : FALSE,
+            /*underline=*/ed.underline() ? TRUE : FALSE, /*strikeout=*/FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+        HFONT old_font = static_cast<HFONT>(SelectObject(hdc, font));
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(0, 0, 0));
+        const std::string& t = ed.text();
+        for (size_t i = 0; i < t.size() && i < lay.glyphs.size(); ++i) {
+          wchar_t ch = static_cast<wchar_t>(static_cast<unsigned char>(t[i]));
+          TextOutW(hdc, lay.glyphs[i].x, lay.glyphs[i].y, &ch, 1);
+        }
+        // Caret: a filled vertical bar at the layout caret rect.
+        RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
+                   lay.caret.y + lay.caret.h};
+        HBRUSH caret_brush = CreateSolidBrush(RGB(0, 0, 0));
+        FillRect(hdc, &cr, caret_brush);
+        DeleteObject(caret_brush);
+        SelectObject(hdc, old_font);
+        DeleteObject(font);
+      }
+      EndPaint(hwnd, &ps);
+      return 0;
+    }
     case WM_DESTROY:
       PostQuitMessage(0);
       return 0;
@@ -862,6 +1032,7 @@ int Run() {
   // 4. Fire the platform/UIA events so a UIA client surfaces TextChanged +
   //    TextSelectionChanged. This is the half blite_host.cc could not reach.
   FirePlatformEditEvents(&host);
+  ::InvalidateRect(hwnd, nullptr, TRUE);  // repaint with the edited text/caret
 
   // 5. Keep pumping so NVDA can process + announce the events, then self-exit
   //    (autonomous capture leaves no orphan window). ~12s is ample for NVDA to

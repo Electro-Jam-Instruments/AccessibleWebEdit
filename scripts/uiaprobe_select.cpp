@@ -33,7 +33,19 @@ static void PrintSelection(IUIAutomationTextPattern* tp, const wchar_t* label) {
         BSTR t = nullptr; HRESULT gh = r0->GetText(80, &t);
         wprintf(L"%s: ranges=%d GetText hr=0x%08x text='%s'\n", label, n, (unsigned)gh,
                 (t && *t) ? t : L"<empty>");
-        if (t) SysFreeString(t); r0->Release();
+        if (t) SysFreeString(t);
+        // The caret/selection rect(s) in SCREEN px (groups of 4 doubles).
+        SAFEARRAY* rects = nullptr;
+        if (SUCCEEDED(r0->GetBoundingRectangles(&rects)) && rects) {
+          LONG lb = 0, ub = -1; SafeArrayGetLBound(rects, 1, &lb); SafeArrayGetUBound(rects, 1, &ub);
+          double* d = nullptr; SafeArrayAccessData(rects, reinterpret_cast<void**>(&d));
+          LONG cnt = ub - lb + 1;
+          if (cnt < 4) wprintf(L"    boundingRects: (none -- degenerate caret returns no rect)\n");
+          for (LONG i = 0; i + 3 < cnt; i += 4)
+            wprintf(L"    boundingRect screen=[%.0f,%.0f %.0fx%.0f]\n", d[i], d[i+1], d[i+2], d[i+3]);
+          SafeArrayUnaccessData(rects); SafeArrayDestroy(rects);
+        }
+        r0->Release();
       }
     } else wprintf(L"%s: ranges=0\n", label);
     sel->Release();
