@@ -192,6 +192,7 @@ struct Metrics {
                      // this exact width so painted glyphs == layout positions.
   int cell_w = 13;
   int cell_h = 24;
+  int line_h = 28;   // vertical step per line (multi-line). cell_h + leading.
 };
 
 struct Layout {
@@ -201,18 +202,36 @@ struct Layout {
   int height = 0;
 };
 
+// Line+column of a character offset, honoring '\n' line breaks. (Explicit
+// newlines only for now; soft word-wrap is a later refinement.)
+inline void LineColOf(const std::string& t, int offset, int* line, int* col) {
+  int ln = 0, cl = 0;
+  for (int i = 0; i < offset && i < static_cast<int>(t.size()); ++i) {
+    if (t[i] == '\n') { ++ln; cl = 0; } else { ++cl; }
+  }
+  *line = ln;
+  *col = cl;
+}
+
 inline Layout LayOut(const MockCanvasEditor& ed, const Metrics& m = Metrics{}) {
   Layout out;
-  const int n = static_cast<int>(ed.text().size());
-  out.glyphs.reserve(n);
-  for (int i = 0; i < n; ++i) {
-    out.glyphs.push_back(
-        Rect{m.origin_x + i * m.advance, m.origin_y, m.cell_w, m.cell_h});
+  const std::string& t = ed.text();
+  out.glyphs.reserve(t.size());
+  int line = 0, col = 0, max_col = 0;
+  for (size_t i = 0; i < t.size(); ++i) {
+    // Each char (including '\n') gets a rect at its current line/col so per-char
+    // bounds stay addressable; the newline's rect sits at end-of-line.
+    out.glyphs.push_back(Rect{m.origin_x + col * m.advance,
+                              m.origin_y + line * m.line_h, m.cell_w, m.cell_h});
+    if (t[i] == '\n') { ++line; col = 0; }
+    else { ++col; if (col > max_col) max_col = col; }
   }
-  out.caret = Rect{m.origin_x + ed.caret() * m.advance - 1, m.origin_y - 2, 2,
-                   m.cell_h + 4};
-  out.width = m.origin_x + n * m.advance + m.origin_x;
-  out.height = m.origin_y + m.cell_h + m.origin_y;
+  int cl = 0, cc = 0;
+  LineColOf(t, ed.caret(), &cl, &cc);
+  out.caret = Rect{m.origin_x + cc * m.advance - 1,
+                   m.origin_y + cl * m.line_h - 2, 2, m.cell_h + 4};
+  out.width = m.origin_x + max_col * m.advance + m.origin_x;
+  out.height = m.origin_y + (line + 1) * m.line_h + m.origin_y;
   return out;
 }
 
@@ -517,33 +536,43 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     if (!editor_)
       return gfx::Rect();
     Metrics m;
-    const int n = static_cast<int>(editor_->text().size());
-    int cx = m.origin_x, cy = m.origin_y;
-    int cw = (n > 0 ? n * m.advance : m.advance);
-    int ch = m.cell_h;
     if (id == kRoot) {
       RECT cl;
       ::GetClientRect(hwnd_, &cl);
-      cx = 0;
-      cy = 0;
-      cw = cl.right - cl.left;
-      ch = cl.bottom - cl.top;
+      POINT o = {0, 0};
+      ::ClientToScreen(hwnd_, &o);
+      return gfx::Rect(o.x, o.y, cl.right - cl.left, cl.bottom - cl.top);
     }
-    POINT tl = {cx, cy};
+    // Multi-line text bounding box: widest column x line count.
+    const std::string& t = editor_->text();
+    int lines = 1, col = 0, max_col = 0;
+    for (char c : t) {
+      if (c == '\n') { ++lines; col = 0; }
+      else { ++col; if (col > max_col) max_col = col; }
+    }
+    int cw = (max_col > 0 ? max_col : 1) * m.advance;
+    int ch = lines * m.line_h;
+    POINT tl = {m.origin_x, m.origin_y};
     ::ClientToScreen(hwnd_, &tl);
     return gfx::Rect(tl.x, tl.y, cw, ch);
   }
 
-  // Screen rect spanning characters [start,end) of the single run, from the same
-  // layout metrics. A degenerate range (start==end) returns width 0 -- AXRange
-  // itself widens that to a 1px caret bar (and DCHECKs width==0 first).
+  // Screen rect spanning characters [start,end), line-aware. A degenerate range
+  // (start==end) returns width 0 on its line -- AXRange widens it to a 1px caret
+  // bar (and DCHECKs width==0 first). A same-line span is its width; a cross-line
+  // span is approximated on the start line (per-line rects need AX line structure).
   gfx::Rect InnerTextRangeScreenBounds(int start_offset, int end_offset) {
     if (!editor_)
       return gfx::Rect();
     Metrics m;
-    int x = m.origin_x + start_offset * m.advance;
-    int w = (end_offset - start_offset) * m.advance;  // 0 for a degenerate caret
-    POINT tl = {x, m.origin_y};
+    const std::string& t = editor_->text();
+    int sl, sc, el, ec;
+    LineColOf(t, start_offset, &sl, &sc);
+    LineColOf(t, end_offset, &el, &ec);
+    int x = m.origin_x + sc * m.advance;
+    int y = m.origin_y + sl * m.line_h;
+    int w = (el == sl) ? (ec - sc) * m.advance : m.cell_w;
+    POINT tl = {x, y};
     ::ClientToScreen(hwnd_, &tl);
     return gfx::Rect(tl.x, tl.y, w, m.cell_h);
   }
@@ -926,11 +955,22 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         HFONT old_font = static_cast<HFONT>(SelectObject(hdc, font));
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, RGB(0, 0, 0));
-        // One TextOut for the whole run -> continuous underline + natural italic.
+        // One TextOut PER LINE (split on '\n') -> continuous underline + natural
+        // italic per line, each at its layout y. Matches the multi-line LayOut.
         const std::string& t = ed.text();
-        std::wstring wt(t.begin(), t.end());
-        TextOutW(hdc, m.origin_x, m.origin_y, wt.c_str(),
-                 static_cast<int>(wt.size()));
+        int line = 0;
+        size_t start = 0;
+        for (size_t i = 0; i <= t.size(); ++i) {
+          if (i == t.size() || t[i] == '\n') {
+            std::string ls = t.substr(start, i - start);
+            std::wstring w(ls.begin(), ls.end());
+            if (!w.empty())
+              TextOutW(hdc, m.origin_x, m.origin_y + line * m.line_h, w.c_str(),
+                       static_cast<int>(w.size()));
+            ++line;
+            start = i + 1;
+          }
+        }
         // Caret: a filled vertical bar at the layout caret rect.
         RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
                    lay.caret.y + lay.caret.h};
@@ -972,6 +1012,7 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         switch (wparam) {
           case VK_BACK: text_changed = ed->Backspace(); break;
           case VK_DELETE: text_changed = ed->DeleteForward(); break;
+          case VK_RETURN: ed->InsertText("\n"); text_changed = true; break;
           case VK_LEFT: ed->MoveCaret(-1); break;
           case VK_RIGHT: ed->MoveCaret(1); break;
           case VK_HOME: ed->CaretHome(); break;
