@@ -67,6 +67,7 @@
 #include <vector>
 
 #include "base/at_exit.h"
+#include "base/i18n/icu_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/win/scoped_com_initializer.h"
@@ -773,11 +774,26 @@ gfx::NativeViewAccessible BliteNodeDelegate::GetParent() const {
   return d ? d->GetNativeViewAccessible() : nullptr;
 }
 
+// A text field / static text is a UIA LEAF: its inner text structure (StaticText,
+// InlineTextBox) exists only for AXPosition, never as navigable UIA elements --
+// exposing the inline box made NVDA's web text navigation error on focus
+// (_moveToEdgeOfReplacedContent). AXPosition still walks the AXNode tree directly,
+// and GetFromNodeID still resolves the (still-present) inner platform nodes.
+static bool HidesChildrenFromUIA(const AXNode* node) {
+  const ax::mojom::Role role = node->GetRole();
+  return role == ax::mojom::Role::kTextField ||
+         role == ax::mojom::Role::kStaticText;
+}
+
 size_t BliteNodeDelegate::GetChildCount() const {
+  if (HidesChildrenFromUIA(node()))
+    return 0;
   return node()->GetChildCount();
 }
 
 gfx::NativeViewAccessible BliteNodeDelegate::ChildAtIndex(size_t index) const {
+  if (HidesChildrenFromUIA(node()))
+    return nullptr;
   AXNode* child = node()->GetChildAtIndex(index);
   if (!child)
     return nullptr;
@@ -1210,6 +1226,13 @@ int Run() {
 
 int main(int argc, char** argv) {
   base::AtExitManager at_exit;
+  // Load ICU data. AXPosition's grapheme/word break iteration (which a screen
+  // reader triggers via ITextRangeProvider::ExpandToEnclosingUnit when it
+  // navigates by character/word) calls into ICU; without InitializeICU the
+  // break iterator's ubrk_open fails and the process FATALs. (Reads icudtl.dat
+  // from the executable directory -- present in out/host.)
+  if (!base::i18n::InitializeICU())
+    std::cerr << "WARNING: InitializeICU failed -- text navigation may crash\n";
   // COM apartment for UIA. STA is the conventional choice for a UI message
   // pump + UIA provider.
   // RESOLVED(VM): ScopedCOMInitializer default ctor initializes an STA, which

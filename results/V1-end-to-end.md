@@ -1,4 +1,25 @@
-# V1 — end-to-end insert + caret → UIA → NVDA (first run)
+# V1 — end-to-end insert + caret → UIA → NVDA
+
+## ✅ V1 PROVEN (2026-06-27): NVDA speaks our custom non-Blink field
+With NVDA 2026.x (No-speech synth, log-level 12, `results/nvda-v1-PROVEN.log`), against the B-lite host:
+NVDA announced our field as **`Speaking [..., 'edit', ..., 'hello']`** — role "edit", content "hello", no name
+(so it is OUR field, not Chrome's named "Ask me anything"). The whole thesis lands end-to-end: custom
+canvas-style editor model → `Bridge` → `AXTree` → `AXPlatformNodeWin` → UIA → **NVDA actually says "edit, hello."**
+No `gainFocus` error, no crash.
+
+Two fixes got it there (after the field was already a complete editable surface to the UIA client):
+1. **Flat UIA leaf:** stop exposing the StaticText/InlineTextBox as navigable UIA elements
+   (`HidesChildrenFromUIA`: text-field/static-text report no UIA children; positions still walk the AXNode
+   tree). The exposed inline box made NVDA's web text navigation treat it as embedded "replaced content".
+2. **`base::i18n::InitializeICU()` in `main()`:** when NVDA navigates by word/character it calls
+   `ITextRangeProvider::ExpandToEnclosingUnit` → `AXPosition::GetGraphemeIterator` → ICU `ubrk_open`, which
+   FATAL-crashed the host without ICU data. That crash was the actual cause of NVDA's `gainFocus` error.
+
+Remaining NVDA refinements (V2/V4): announcing the live edit (`hello`→`hello!` TextChanged) and caret-move
+read-back as they happen; word/line navigation read-back; braille. The core "screen reader announces our
+editable field + its text" is PROVEN.
+
+# (historical) V1 — end-to-end insert + caret → UIA → NVDA (first run)
 
 Date: 2026-06-25. Host: local Win11 (SAC off), **RDP session 2**. Target:
 `out\host\blite_host_win.exe` (full cone, tag 149.0.7827.115).

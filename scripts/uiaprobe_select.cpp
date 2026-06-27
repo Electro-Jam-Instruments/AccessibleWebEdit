@@ -74,6 +74,43 @@ int main(int argc, char** argv) {
 
   IUIAutomationTextRange* doc = nullptr;
   if (FAILED(tp->get_DocumentRange(&doc)) || !doc) { wprintf(L"no DocumentRange\n"); return 6; }
+  // Does the field's text range report CHILD elements (embedded/"replaced"
+  // content)? A flat editable field should report 0 -- children here are what
+  // make NVDA's _moveToEdgeOfReplacedContent error on gainFocus.
+  {
+    IUIAutomationElementArray* kids = nullptr;
+    HRESULT hk = doc->GetChildren(&kids);
+    int n = -1; if (SUCCEEDED(hk) && kids) kids->get_Length(&n);
+    wprintf(L"DocumentRange.GetChildren() hr=0x%08x count=%d\n", (unsigned)hk, n);
+    for (int i = 0; i < n; ++i) {
+      IUIAutomationElement* k = nullptr;
+      if (SUCCEEDED(kids->GetElement(i, &k)) && k) {
+        CONTROLTYPEID ct = 0; k->get_CurrentControlType(&ct);
+        BSTR kn = nullptr; k->get_CurrentName(&kn);
+        wprintf(L"    child[%d] ctrlType=%d name='%s'\n", i, ct, kn ? kn : L"");
+        if (kn) SysFreeString(kn); k->Release();
+      }
+    }
+    if (kids) kids->Release();
+    IUIAutomationElement* enc = nullptr;
+    if (SUCCEEDED(doc->GetEnclosingElement(&enc)) && enc) {
+      CONTROLTYPEID ct = 0; enc->get_CurrentControlType(&ct);
+      wprintf(L"DocumentRange.GetEnclosingElement() ctrlType=%d\n", ct);
+      enc->Release();
+    }
+  }
+  // Exercise grapheme/word break iteration (ICU) the way NVDA does when it
+  // navigates -- this is what FATAL-crashed the host before InitializeICU.
+  {
+    IUIAutomationTextRange* wr = nullptr;
+    if (SUCCEEDED(doc->Clone(&wr)) && wr) {
+      HRESULT he = wr->ExpandToEnclosingUnit(TextUnit_Word);
+      wprintf(L"ExpandToEnclosingUnit(Word) hr=0x%08x (no crash = ICU ok)\n", (unsigned)he);
+      BSTR wt = nullptr; wr->GetText(20, &wt);
+      wprintf(L"    word-unit text='%s'\n", (wt && *wt) ? wt : L"<empty>");
+      if (wt) SysFreeString(wt); wr->Release();
+    }
+  }
   // Is the DocumentRange itself valid? GetText runs the same validation macro.
   BSTR dtext = nullptr; HRESULT htext = doc->GetText(-1, &dtext);
   wprintf(L"DocumentRange.GetText() hr=0x%08x text='%s'\n",
