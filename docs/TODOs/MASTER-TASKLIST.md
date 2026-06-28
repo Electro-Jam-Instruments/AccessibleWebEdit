@@ -103,9 +103,29 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
       + SelectionProvider2 members. NVDA: selected cells announced. visual: highlight selected cells.
 
 ## Phase 5 — Editor visuals (looks like a basic editor)
-- [ ] 5.1 Unified rendering of all the above (caret, selection highlight, list markers, heading sizes,
-      table grid) — coupled to the a11y geometry via the one layout pass.
-- [ ] 5.2 Interactive polish in `--viewer` (type, navigate, select) reads correctly through NVDA.
+- [x] 5.1 Unified rendering — DONE PROVEN. WM_PAINT draws, from the one LayOut: the heading (bold/larger),
+      bulleted list (markers + indent), per-run fonts/weights, the caret, the table grid (bold header), and
+      the selected-cell highlight — all coupled to the a11y geometry. Evidence: results/blite-table.png,
+      results/blite-selection.png, results/blite-heading.png, results/blite-fonts.png, results/blite-list.png.
+- [ ] 5.2 Interactive polish in `--viewer` (type, navigate, select) reads correctly through NVDA. Typing is
+      proven (task 9); list/heading/table NAVIGATION through NVDA needs keystroke-driven capture (the
+      autonomous capture is focus-only) -- a deeper harness step.
+
+## ★ REMAINING WORK (after this session's Phase 3 + 4.1 + 4.2-v1 + 5.1) ★
+- **4.2-v2 — ISelectionProvider2 (Chromium library patch).** Stock AXPlatformNodeWin has only
+  ISelectionProvider (v1) and GetSelectedItems skips non-item-like kGridCell, so container-level
+  GetSelection of cells returns 0. To deliver the v2 interface the user asked for:
+  1. Patch `ui/accessibility/platform/ax_platform_node_win.h`: add `public ISelectionProvider2` to the
+     class bases; declare `get_FirstSelectedItem`, `get_LastSelectedItem`, `get_CurrentSelectedItem`,
+     `get_ItemCount`.
+  2. Patch `ax_platform_node_win.cc`: implement them over GetSelectedItems; ALSO extend GetSelectedItems
+     (ax_platform_node_base.cc) so a kGrid enumerates kGridCell descendants with kSelected (or override in
+     the host). Add UIA_SelectionPattern2 QI in `GetPatternProviderImpl`.
+  3. Rebuild the `accessibility_platform` ninja target (the lib the host links), then relink the host.
+  4. probe: extend uiaprobe_selection -> QI ISelectionProvider2, read FirstSelectedItem/CurrentSelectedItem
+     + container GetSelection now returns the cell. NVDA: selected-cell announce on grid nav.
+  Keep the patch under `patches/` per the project convention; it carries the Chromium BSD header.
+- **5.2 — keystroke-driven NVDA navigation capture** to voice list/heading/table NAV (not just focus).
 
 ## Completion gate
 - [ ] When 3.1–3.4, 4.1–4.2, 5.1–5.2 are PROVEN (probe + NVDA + visual), create
