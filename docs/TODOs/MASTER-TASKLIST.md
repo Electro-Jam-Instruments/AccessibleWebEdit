@@ -25,9 +25,32 @@ native UIA probe `scripts/uiaprobe*.cpp` → (c) verify with NVDA No-speech capt
 single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pattern.
 
 ## Phase 3 — Rich text
-- [ ] 3.1 **Mixed-format runs** (multiple attributes within one field). infra: non-atomic field
-      with per-run text nodes (each own bold/italic/underline). probe: GetAttributeValue per run +
-      "Mixed" across spans. NVDA: attribute change announced across runs. visual: paint per-run fonts.
+- [~] 3.1 **Mixed-format runs** (multiple attributes within one field).
+  - [x] editor per-char `CharStyle` + `runs()` accessor (maximal same-style spans); backward-compatible.
+  - [x] field `kNonAtomicTextFieldRoot` → attribute resolution moves field→StaticText (verified, no regress).
+  - [ ] **per-run Bridge (NEXT — precise design):**
+        1. Editor: mixed initial content via a ctor, SINGLE-LINE for now, e.g. text `"Bold plain"`, chars 0-3
+           `{bold}`, 4-9 `{}`. (Changing default content is fine; V1 proof already banked.)
+        2. Refactor `FillRunAttributes` to take a `const CharStyle&` (not the editor) -> set kFontWeight/
+           kTextStyle(italic)/kTextUnderlineStyle from the style.
+        3. Bridge `BuildInitialTree`+`BuildEditDelta`: for run i in `editor.runs()` emit StaticText id `3+2*i`
+           + InlineTextBox id `4+2*i`, name = `text.substr(run.start,run.length)`, attrs = FillRunAttributes(style).
+           Field `child_ids = {3+2*i ...}`. Single run -> kText=3/kInline=4 (back-compat). Keep field+each
+           StaticText non-navigable (HidesChildrenFromUIA already does text-field+static-text).
+        4. Selection: caret global offset c -> run r = last run with start<=c; local=c-start; sel anchor/focus
+           object = inline box `4+2*r`, offset=local.
+        5. Host: replace the fixed `{kRoot,kField,kText,kInline}` delegate loop with `MaterializeDelegates()`
+           that WALKS the tree (root+descendants) creating one BliteNodeDelegate per node; add
+           `RematerializeDelegates()` and call it after EVERY `tree_->Unserialize(...)` (ApplyLocalEdit,
+           ApplyClientSetValue, the scripted edit) to add new run-node delegates + drop stale ones.
+        6. Bounds: add host `RunGlobalStart(AXNodeID)` (sum preceding runs' lengths via field children order);
+           `NodeScreenBounds`/`InnerTextRangeScreenBounds` map a run node's LOCAL offset -> global = start+local
+           -> screen rect (single-line: x=origin_x+global*advance).
+  - [ ] probe: extend `uiaprobe_attrs` -> clone DocumentRange, MoveEndpointByUnit(Character) to cover run1 vs
+        run2, GetAttributeValue per sub-range = per-run; whole range = `UiaGetReservedMixedAttributeValue`
+        (VT_UNKNOWN). Also re-run uiaprobe (flat leaf intact) + uiaprobe_select (ExpandToEnclosingUnit no crash).
+  - [ ] NVDA: capture — navigate runs, attribute change ("bold"/"not bold") announced; field still read (flat).
+  - [ ] visual: WM_PAINT iterate runs, CreateFontW per run from run.style, draw each run at its layout x.
 - [ ] 3.2 **Bulleted & numbered lists.** infra: `kList` + `kListItem` + `kListMarker` (ordered/unordered).
       probe: UIA List/ListItem structure + marker text + `SetSize`/`PositionInSet`. NVDA: "list", "bullet",
       item N of M. visual: paint bullets / numbers.

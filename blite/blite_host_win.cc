@@ -299,21 +299,28 @@ inline Layout LayOut(const MockCanvasEditor& ed, const Metrics& m = Metrics{}) {
 // from each leaf's GetLowestPlatformAncestor (it excludes descendants of leaves),
 // which for our text is the StaticText -- so the attributes must live there, not
 // only on the inline box. We set them on BOTH so either resolution works.
-void FillRunAttributes(AXNodeData& node, const MockCanvasEditor& editor) {
+// Per-RUN attribute writer (the real one): maps a CharStyle to the UIA TextRange
+// attributes. The per-run Bridge calls this with each run's style.
+void FillRunAttributes(AXNodeData& node, const CharStyle& s) {
   // Always set a weight (700 bold / 400 normal) so a bold->not-bold change is a
   // clean value change UIA_FontWeightAttributeId reports (not 700->absent).
   node.AddFloatAttribute(ax::mojom::FloatAttribute::kFontWeight,
-                         editor.bold() ? 700.0f : 400.0f);
-  if (editor.italic()) {
+                         s.bold ? 700.0f : 400.0f);
+  if (s.italic) {
     node.AddIntAttribute(
         ax::mojom::IntAttribute::kTextStyle,
         1 << static_cast<int>(ax::mojom::TextStyle::kItalic));
   }
-  if (editor.underline()) {
+  if (s.underline) {
     node.AddIntAttribute(
         ax::mojom::IntAttribute::kTextUnderlineStyle,
         static_cast<int>(ax::mojom::TextDecorationStyle::kSolid));
   }
+}
+
+// Back-compat overload for the current single-run callers: the first char's style.
+void FillRunAttributes(AXNodeData& node, const MockCanvasEditor& editor) {
+  FillRunAttributes(node, editor.style_at(0));
 }
 
 void FillInlineTextBox(AXNodeData& node, const MockCanvasEditor& editor) {
