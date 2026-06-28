@@ -15,6 +15,47 @@ Chromium checkout target: `C:\src\chromium\src`, tag `149.0.7827.115`.
 
 ---
 
+# ★ ACTIVE ROADMAP — make it a REAL editor (the loop works these top-down) ★
+
+V1 is PROVEN (NVDA says "edit, hello" — `results/nvda-v1-PROVEN.log`). Now build it
+into a real rich editor + tables, each feature verified the SAME way:
+**(a) build producer infra (editor model + Bridge + AX nodes) → (b) verify with a
+native UIA probe `scripts/uiaprobe*.cpp` → (c) verify with NVDA No-speech capture →
+(d) add the coupled visual rendering.** Tick each sub-step with evidence. Keep the
+single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pattern.
+
+## Phase 3 — Rich text
+- [ ] 3.1 **Mixed-format runs** (multiple attributes within one field). infra: non-atomic field
+      with per-run text nodes (each own bold/italic/underline). probe: GetAttributeValue per run +
+      "Mixed" across spans. NVDA: attribute change announced across runs. visual: paint per-run fonts.
+- [ ] 3.2 **Bulleted & numbered lists.** infra: `kList` + `kListItem` + `kListMarker` (ordered/unordered).
+      probe: UIA List/ListItem structure + marker text + `SetSize`/`PositionInSet`. NVDA: "list", "bullet",
+      item N of M. visual: paint bullets / numbers.
+- [ ] 3.3 **Heading levels.** infra: `kHeading` + `IntAttribute::kHierarchicalLevel` (1-6). probe: UIA
+      heading level (AriaProperties/`LevelId`). NVDA: "heading level N". visual: larger/bolder headings.
+- [ ] 3.4 **Fonts & font weights.** infra: `StringAttribute::kFontFamily` + `FloatAttribute::kFontWeight`
+      per run. probe: `UIA_FontNameAttributeId` + `UIA_FontWeightAttributeId` per run. NVDA: font/weight
+      reported. visual: paint different families/weights.
+
+## Phase 4 — Tables
+- [ ] 4.1 **Text in a table cell.** infra: `kTable` → `kRow` → `kCell`(text), row/col span + indices.
+      probe: UIA Grid/Table/GridItem patterns + cell text + RowCount/ColumnCount. NVDA: "table", row/col,
+      cell content on navigation. visual: paint grid + cell text.
+- [ ] 4.2 **Cell selection via ISelectionProvider2.** infra: selection on cells; `ISelectionProvider2`
+      (FirstSelectedItem/LastSelectedItem/CurrentSelectedItem) — `patches/` has a sketch. probe: GetSelection
+      + SelectionProvider2 members. NVDA: selected cells announced. visual: highlight selected cells.
+
+## Phase 5 — Editor visuals (looks like a basic editor)
+- [ ] 5.1 Unified rendering of all the above (caret, selection highlight, list markers, heading sizes,
+      table grid) — coupled to the a11y geometry via the one layout pass.
+- [ ] 5.2 Interactive polish in `--viewer` (type, navigate, select) reads correctly through NVDA.
+
+## Completion gate
+- [ ] When 3.1–3.4, 4.1–4.2, 5.1–5.2 are PROVEN (probe + NVDA + visual), create
+      `results/PROTOTYPE-COMPLETE` with the evidence index. That ends the loop.
+
+---
+
 ## Phase 0 — Toolchain setup
 - [x] 0.1 VS Build Tools (C++ + Win11 SDK) — **DONE** (verified cl.exe 14.44 + SDK 26100, `vs2022_install=C:\BuildTools`)
 - [x] 0.2 depot_tools cloned to `C:\src\depot_tools`, `DEPOT_TOOLS_WIN_TOOLCHAIN=0`, git perf config — **DONE**
@@ -37,9 +78,11 @@ Chromium checkout target: `C:\src\chromium\src`, tag `149.0.7827.115`.
 - [x] 2.3 Drive 1 insert + 1 caret move; capture events — **DONE PROVEN.** Host fires
       `kTextChanged`+`kTextSelectionChanged`+`kValueChanged`; a *subscribed* native client receives all four
       (`scripts/uiaprobe_events.cpp`: focus→Edit, TextChanged, SelectionChanged, ValueChanged).
-- [ ] 2.4 Run NVDA (No-speech synth, log), capture utterance, assert announcement — **BLOCKED(needs user:
-      unlocked/console desktop + NVDA not colliding with the user's own screen reader).** App-first start order
-      ready; capture lifecycle proven (memory `nvda-autonomous-capture`).
+- [x] 2.4 Run NVDA (No-speech synth, log), capture utterance, assert announcement — **DONE PROVEN
+      2026-06-27.** NVDA spoke our field `Speaking ['edit', ..., 'hello']` (`results/nvda-v1-PROVEN.log`).
+      Needed: flat UIA leaf (`HidesChildrenFromUIA`) + `base::i18n::InitializeICU()` in main (NVDA's
+      word/char nav → ICU break iterator → FATAL without ICU). Autonomous capture: launch NVDA No-speech
+      → launch host (stdout→file) → grep log → `nvda -q`.
 - [~] 2.5 **Verdict** — **PARTIAL: PROVEN at the native-UIA-client level** (the faithful API NVDA uses);
       `results/V1-end-to-end.md` written. Bidirectional flow also proven: events out, reads in, **writes in**
       (`IValueProvider::SetValue` round-trips via `AccessibilityPerformAction(kSetValue)`). NVDA *speech* leg = 2.4.
