@@ -15,14 +15,66 @@ Chromium checkout target: `C:\src\chromium\src`, tag `149.0.7827.115`.
 
 ---
 
-# ★ ACTIVE ROADMAP — make it a REAL editor (the loop works these top-down) ★
+# ★ ACTIVE ROADMAP — real editor EDITING (caret / selection / table) ★
 
-V1 is PROVEN (NVDA says "edit, hello" — `results/nvda-v1-PROVEN.log`). Now build it
-into a real rich editor + tables, each feature verified the SAME way:
-**(a) build producer infra (editor model + Bridge + AX nodes) → (b) verify with a
-native UIA probe `scripts/uiaprobe*.cpp` → (c) verify with NVDA No-speech capture →
-(d) add the coupled visual rendering.** Tick each sub-step with evidence. Keep the
-single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pattern.
+Milestone 1 (rich text + tables + cell selection + visuals) is DONE & PROVEN —
+recorded in `results/MILESTONE-1-prototype-complete.md`. The loop now builds the
+**editing model** so it feels like a real editor (Word/Docs behavior), per the spec
++ resolved decisions in **`docs/research/18-caret-selection-and-table-editing-model.md`**
+(read it first). Each phase verified the SAME way:
+**(a) producer infra (editor Pos/anchor model + Bridge + AX nodes in
+`blite/blite_host_win.cc`) → (b) native UIA probe `scripts/uiaprobe*.cpp` (add one if
+needed: caret position, GetSelection range, cell GetSelection) → (c) NVDA No-speech
+capture (drive keystrokes by PostMessage as in commit 12e0ac8 — arrows/Shift via
+WM_KEYDOWN) → (d) coupled visual (selection highlight / caret in cell / cell block).**
+Tick each sub-step with evidence. Keep the one layout pass + deferred-a11y-off-input.
+
+Selection rule (doc 18): same-cell ⇒ TEXT selection (AXTreeData anchor/focus ->
+ITextRangeProvider); cross-cell ⇒ CELL block (per-cell kSelected -> ISelectionProvider2).
+Drive exactly one per the mode; fire the matching event.
+
+## Phase E1 — Text caret INSIDE a cell  [foundational]
+- [ ] Editor: unify the caret to a Position (body offset OR cell (row,col)+cell_off) + an
+      `anchor_` + `desired_col_`. Replace the whole-cell cursor (commit 12e0ac8) with a real
+      char-level caret in the cell's text. Left/Right/Home/End move within the cell; at the cell
+      text edge, cross to the adjacent cell (D2 column-match on vertical entry; D1 preserve column).
+- [ ] Bridge: when the caret is in a cell, set sel anchor/focus to that cell's INLINE BOX at
+      `cell_off` (a real degenerate text caret in the cell), focus_id = the cell. No kSelected for a
+      collapsed caret.
+- [ ] probe: a caret-position probe (Text pattern GetSelection degenerate range inside the cell; the
+      cell is the enclosing element). NVDA: arrowing reads the cell's characters. visual: caret bar
+      drawn inside the cell at `cell_off` (not the whole-cell highlight).
+## Phase E2 — Shift-selection in BODY text
+- [ ] Shift+arrows extend focus from a pinned anchor; non-Shift collapses. Backspace/Delete/typing
+      replace a non-empty selection. Home/End line-relative; Ctrl+Left/Right word moves.
+- [ ] Bridge: set AXTreeData sel anchor/focus to the real range. probe: GetSelection non-degenerate +
+      GetText. NVDA: "selected <text>". visual: highlight behind the selected glyph run.
+## Phase E3 — Shift-selection INSIDE one cell (text mode, bounded to the cell)
+- [ ] Same as E2 but the focus stays in the cell; selection is the cell's inner text range.
+## Phase E4 — Promote to CELL-BLOCK on boundary cross
+- [ ] When the Shift focus crosses into another cell, flip to cell mode: set kSelected on the
+      anchor-cell↔focus-cell rectangle, collapse the text range to the focus cell, fire the grid
+      `kSelectedChildrenChanged` + focus-cell `kFocus`. Demote back to text when focus re-enters the
+      anchor cell. probe: container GetSelection returns the block cells; ISelectionProvider2
+      First/Last/Current. NVDA: cells announced. visual: fill the whole block.
+## Phase E5 — Delete/Backspace + word moves (D4)
+- [ ] Caret in cell: Backspace at cell start / Delete at cell end = NO-OP (no cross-cell merge).
+      Text selection ⇒ delete text. Cell block ⇒ clear the selected cells' contents (keep rows/cols),
+      caret to the anchor cell. Ctrl+Backspace/Delete = word.
+## Phase E6 — Tab / Shift+Tab / Ctrl+Tab (Word model, D5)
+- [ ] Tab ⇒ next cell + select its whole text; Shift+Tab ⇒ previous cell + select; Tab in the last
+      cell ⇒ append a row, caret to its first cell; Ctrl+Tab ⇒ literal tab char in the cell.
+## Phase E7 — Body↔table Shift (D3: snap to whole cells)
+- [ ] Shift-extend from body INTO the table ⇒ select whole cells (snap the rectangle), never a
+      half-selected cell from outside.
+
+## Completion gate (editing)
+- [ ] When E1–E7 are PROVEN (probe + NVDA + visual), recreate `results/PROTOTYPE-COMPLETE`
+      with the editing-evidence index. That ends the loop. (Re-arm by deleting it + `scripts/.loop-count`.)
+
+---
+
+# Milestone 1 (DONE) — rich text + tables + cell selection + visuals
 
 ## Phase 3 — Rich text
 - [x] 3.1 **Mixed-format runs** — DONE PROVEN (infra+probe+visual+NVDA+robustness).
@@ -130,9 +182,10 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
   Keep the patch under `patches/` per the project convention; it carries the Chromium BSD header.
 - **5.2 — keystroke-driven NVDA navigation capture** to voice list/heading/table NAV (not just focus).
 
-## Completion gate
-- [ ] When 3.1–3.4, 4.1–4.2, 5.1–5.2 are PROVEN (probe + NVDA + visual), create
-      `results/PROTOTYPE-COMPLETE` with the evidence index. That ends the loop.
+## Completion gate (Milestone 1) — DONE
+- [x] 3.1–3.4, 4.1–4.2, 5.1 all PROVEN (probe + NVDA + visual). Recorded in
+      `results/MILESTONE-1-prototype-complete.md`. The ACTIVE work is now the editing model
+      (Phases E1–E7 at the top); its gate recreates `results/PROTOTYPE-COMPLETE`.
 
 ---
 
