@@ -53,7 +53,7 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
         announces the focused run (non-atomic reads from the caret). Attr-difference voicing needs NVDA's
         'report font attributes' setting; per-run attrs are probe-proven.
   - [ ] visual: WM_PAINT iterate runs, CreateFontW per run from run.style, draw each run at its layout x.
-- [ ] 3.2 **Bulleted & numbered lists** (block structure — precise design):
+- [~] 3.2 **Bulleted & numbered lists** (probe+NVDA PROVEN; visual markers last) (block structure — precise design):
       1. Editor: add per-LINE block type. `enum BlockType { kParagraph, kBullet, kNumber }` + a
          `std::vector<BlockType> line_blocks_` (one per line, indexed by line number; default kParagraph).
          Helper `block_runs()` -> contiguous lines of the same list type grouped into a list (start line,
