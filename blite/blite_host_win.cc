@@ -137,9 +137,9 @@ struct StyleRun {
 };
 
 // Block-level structure (Phase 3.2+). Each LINE of the buffer is one block. A
-// paragraph is its own block; consecutive list lines of the same kind group into
-// one list. (Headings 3.3 will add kHeading with a level.)
-enum class BlockType { kParagraph, kBullet, kNumber };
+// paragraph/heading is its own block; consecutive list lines of the same kind
+// group into one list. A kHeading line also carries a level (1-6) in the editor.
+enum class BlockType { kParagraph, kBullet, kNumber, kHeading };
 
 // A maximal run of same-type lines. A paragraph is a 1-line group; a run of
 // kBullet/kNumber lines is one list group (ordered? = kNumber).
@@ -154,17 +154,25 @@ struct BlockGroup {
 
 class MockCanvasEditor {
  public:
-  // Demo doc for Phase 3.2: a paragraph title ("Groceries") + a 3-item bullet
-  // list (Apples/Bananas/Cherries). Exercises block structure (kList/kListItem/
-  // kListMarker) end-to-end. (Mixed-format runs proven separately, commit 0798d8d.)
+  // Demo doc for Phase 3.2/3.3: a level-1 HEADING ("Groceries") + a 3-item bullet
+  // list. Exercises block structure (kHeading + kList/kListItem/kListMarker)
+  // end-to-end. (Mixed-format runs proven separately, commit 0798d8d.)
   MockCanvasEditor() {
     text_ = "Groceries\nApples\nBananas\nCherries";
     caret_ = static_cast<int>(text_.size());
     const CharStyle plain_style{false, false, false};
     styles_.assign(text_.size(), plain_style);
     typing_style_ = plain_style;
-    line_blocks_ = {BlockType::kParagraph, BlockType::kBullet,
+    line_blocks_ = {BlockType::kHeading, BlockType::kBullet,
                     BlockType::kBullet, BlockType::kBullet};
+    line_levels_ = {1, 0, 0, 0};  // line 0 is an <h1>
+  }
+
+  // Heading level (1-6) of a line, or 0 if the line is not a heading.
+  int heading_level_of_line(int line) const {
+    return (line >= 0 && line < static_cast<int>(line_levels_.size()))
+               ? line_levels_[line]
+               : 0;
   }
 
   const std::string& text() const { return text_; }
@@ -283,6 +291,8 @@ class MockCanvasEditor {
   CharStyle typing_style_ = CharStyle{true, true, true};
   // Per-line block type (parallel to the lines of text_). Empty => all paragraph.
   std::vector<BlockType> line_blocks_;
+  // Per-line heading level (1-6); 0 / out-of-range => not a heading.
+  std::vector<int> line_levels_;
 };
 
 // ---------------------------------------------------------------------------
@@ -507,6 +517,18 @@ class Bridge {
     };
 
     for (const BlockGroup& g : editor.block_groups()) {
+      if (g.type == BlockType::kHeading) {
+        const int h_id = NewId();
+        AXNodeData h;
+        h.id = h_id;
+        h.role = ax::mojom::Role::kHeading;
+        h.AddIntAttribute(ax::mojom::IntAttribute::kHierarchicalLevel,
+                          editor.heading_level_of_line(g.first_line));
+        field.child_ids.push_back(h_id);
+        EmitText(g.first_line, &h.child_ids);  // heading text under the heading
+        nodes[h_id] = h;
+        continue;
+      }
       if (!g.is_list()) {
         EmitText(g.first_line, &field.child_ids);  // paragraph -> text in field
         continue;
@@ -1064,12 +1086,16 @@ static bool HidesChildrenFromUIA(const AXNode* node) {
   if (role == ax::mojom::Role::kStaticText)
     return true;
   // A text field is a FLAT leaf (NVDA text nav) UNLESS it contains block
-  // structure (a list): then expose that structure so NVDA can navigate it.
+  // structure (a list or a heading): then expose that structure so NVDA can
+  // navigate it. Hide only when EVERY child is plain text.
   if (role == ax::mojom::Role::kTextField) {
-    for (size_t i = 0; i < node->GetChildCount(); ++i)
-      if (node->GetChildAtIndex(i)->GetRole() == ax::mojom::Role::kList)
-        return false;  // structured field -> children navigable
-    return true;       // plain field -> flat leaf
+    for (size_t i = 0; i < node->GetChildCount(); ++i) {
+      const ax::mojom::Role cr = node->GetChildAtIndex(i)->GetRole();
+      if (cr != ax::mojom::Role::kStaticText &&
+          cr != ax::mojom::Role::kInlineTextBox)
+        return false;  // structured field (list/heading) -> children navigable
+    }
+    return true;  // plain field -> flat leaf
   }
   return false;  // list / listitem / listmarker / inline box: navigable as built
 }
@@ -1211,13 +1237,6 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         // The font's cell is forced to the layout advance so painted == layout.
         const std::string& t = ed.text();
         for (const StyleRun& r : ed.runs()) {
-          HFONT font = CreateFontW(
-              m.cell_h, m.advance, 0, 0,
-              r.style.bold ? FW_BOLD : FW_NORMAL, r.style.italic ? TRUE : FALSE,
-              r.style.underline ? TRUE : FALSE, FALSE, DEFAULT_CHARSET,
-              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-              FIXED_PITCH | FF_MODERN, L"Consolas");
-          SelectObject(hdc, font);
           int i = 0;
           while (i < r.length) {
             const int seg_g = r.start + i;
@@ -1227,15 +1246,29 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
               ++i;
             }
             if (!seg.empty() && seg_g < static_cast<int>(lay.glyphs.size())) {
+              // A HEADING line renders bold + a little taller (3.3 visual); the
+              // font width stays m.advance so x positions match the layout.
+              int sline = 0, scol = 0;
+              LineColOf(t, seg_g, &sline, &scol);
+              const bool heading =
+                  ed.block_of_line(sline) == BlockType::kHeading;
+              HFONT font = CreateFontW(
+                  heading ? m.cell_h + 6 : m.cell_h, m.advance, 0, 0,
+                  (r.style.bold || heading) ? FW_BOLD : FW_NORMAL,
+                  r.style.italic ? TRUE : FALSE,
+                  r.style.underline ? TRUE : FALSE, FALSE, DEFAULT_CHARSET,
+                  OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                  FIXED_PITCH | FF_MODERN, L"Consolas");
+              SelectObject(hdc, font);
               std::wstring w(seg.begin(), seg.end());
               TextOutW(hdc, lay.glyphs[seg_g].x, lay.glyphs[seg_g].y, w.c_str(),
                        static_cast<int>(w.size()));
+              SelectObject(hdc, old_font);
+              DeleteObject(font);
             }
             if (i < r.length && t[r.start + i] == '\n')
               ++i;  // skip the newline
           }
-          SelectObject(hdc, old_font);
-          DeleteObject(font);
         }
         // List MARKERS: draw "•" / "N." in the indent reserved by LayOut, just
         // left of each list-item line's (indented) text. Same single layout pass.
