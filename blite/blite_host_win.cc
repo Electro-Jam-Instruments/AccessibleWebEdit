@@ -181,6 +181,11 @@ class MockCanvasEditor {
                : 0;
   }
 
+  // A simple demo TABLE (Phase 4): rows x columns of cell text, rendered after
+  // the text blocks. Not yet part of the caret flow -- 4.1 is structure + cell
+  // text reachable by a screen reader; caret-in-cell editing comes later.
+  const std::vector<std::vector<std::string>>& table() const { return table_; }
+
   const std::string& text() const { return text_; }
 
   // The block type of a given 0-based line (default paragraph past the vector).
@@ -299,6 +304,9 @@ class MockCanvasEditor {
   std::vector<BlockType> line_blocks_;
   // Per-line heading level (1-6); 0 / out-of-range => not a heading.
   std::vector<int> line_levels_;
+  // Demo table (Phase 4): table_[row][col] = cell text. Header row + 2 data rows.
+  std::vector<std::vector<std::string>> table_ = {
+      {"Qty", "Item"}, {"2", "Apples"}, {"6", "Bananas"}};
 };
 
 // ---------------------------------------------------------------------------
@@ -497,12 +505,11 @@ class Bridge {
     FillFieldNode(field, editor);  // id/role/states/value/non-atomic/caret bounds
     field.child_ids.clear();
 
-    // Emit a StaticText+InlineTextBox pair for one line; append the StaticText to
-    // `parent`. One run per line for now (per-run mixed lives WITHIN a line as a
-    // later merge; mixed-format is proven separately, commit 0798d8d).
-    auto EmitText = [&](int li, std::vector<int32_t>* parent) {
-      const std::string s = text.substr(lines[li].start, lines[li].len);
-      const CharStyle style = editor.style_at(lines[li].start);
+    // Emit a StaticText+InlineTextBox pair for a RAW string; append the StaticText
+    // to `parent` and return the inline-box id. One run per call (per-run mixed
+    // lives WITHIN a line as a later merge; mixed-format proven, commit 0798d8d).
+    auto EmitRawText = [&](const std::string& s, const CharStyle& style,
+                           std::vector<int32_t>* parent) -> int {
       const int stid = NewId(), inid = NewId();
       AXNodeData stn;
       stn.id = stid;
@@ -522,8 +529,14 @@ class Bridge {
       FillRunAttributes(inn, style);
       nodes[stid] = stn;
       nodes[inid] = inn;
-      line_inline[li] = inid;
       parent->push_back(stid);
+      return inid;
+    };
+    // Line-based wrapper: text + style come from the line, and the inline box is
+    // recorded for the caret-selection mapping.
+    auto EmitText = [&](int li, std::vector<int32_t>* parent) {
+      line_inline[li] = EmitRawText(text.substr(lines[li].start, lines[li].len),
+                                    editor.style_at(lines[li].start), parent);
     };
 
     for (const BlockGroup& g : editor.block_groups()) {
@@ -571,6 +584,47 @@ class Bridge {
         list.child_ids.push_back(item_id);
       }
       nodes[list_id] = list;
+    }
+
+    // TABLE (Phase 4): kTable -> kRow -> kCell(text). Row/col counts on the table,
+    // row/col index + 1x1 span on each cell -> UIA Grid/Table + GridItem. Cells
+    // carry their text via EmitRawText. (Not in the caret flow yet -- 4.1.)
+    const auto& tbl = editor.table();
+    if (!tbl.empty()) {
+      const int n_rows = static_cast<int>(tbl.size());
+      const int n_cols = static_cast<int>(tbl[0].size());
+      const int table_id = NewId();
+      AXNodeData table;
+      table.id = table_id;
+      table.role = ax::mojom::Role::kTable;
+      table.AddIntAttribute(ax::mojom::IntAttribute::kTableRowCount, n_rows);
+      table.AddIntAttribute(ax::mojom::IntAttribute::kTableColumnCount, n_cols);
+      field.child_ids.push_back(table_id);
+      for (int r = 0; r < n_rows; ++r) {
+        const int row_id = NewId();
+        AXNodeData row;
+        row.id = row_id;
+        row.role = ax::mojom::Role::kRow;
+        row.AddIntAttribute(ax::mojom::IntAttribute::kTableRowIndex, r);
+        table.child_ids.push_back(row_id);
+        for (int c = 0; c < static_cast<int>(tbl[r].size()); ++c) {
+          const int cell_id = NewId();
+          AXNodeData cell;
+          cell.id = cell_id;
+          // Row 0 is a header row (column headers); the rest are data cells.
+          cell.role = (r == 0) ? ax::mojom::Role::kColumnHeader
+                               : ax::mojom::Role::kCell;
+          cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowIndex, r);
+          cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnIndex, c);
+          cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowSpan, 1);
+          cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnSpan, 1);
+          EmitRawText(tbl[r][c], CharStyle{}, &cell.child_ids);
+          nodes[cell_id] = cell;
+          row.child_ids.push_back(cell_id);
+        }
+        nodes[row_id] = row;
+      }
+      nodes[table_id] = table;
     }
 
     nodes[kField] = field;
@@ -1317,6 +1371,45 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         HBRUSH caret_brush = CreateSolidBrush(RGB(0, 0, 0));
         FillRect(hdc, &cr, caret_brush);
         DeleteObject(caret_brush);
+        // TABLE visual (4.1): a simple grid with cell text, below the text blocks.
+        // The header row (row 0) is bold. Geometry is separate from the text
+        // LayOut for now (the table is not yet in the caret flow).
+        {
+          const auto& tbl = ed.table();
+          if (!tbl.empty()) {
+            int n_text_lines = 1;
+            for (char ch : ed.text())
+              if (ch == '\n')
+                ++n_text_lines;
+            const int tx = m.origin_x;
+            const int ty = m.origin_y + (n_text_lines + 1) * m.line_h;  // gap row
+            const int col_w = 96, row_h = m.line_h;
+            HPEN pen = CreatePen(PS_SOLID, 1, RGB(120, 120, 120));
+            HPEN old_pen = static_cast<HPEN>(SelectObject(hdc, pen));
+            HBRUSH old_brush = static_cast<HBRUSH>(
+                SelectObject(hdc, GetStockObject(NULL_BRUSH)));  // cells unfilled
+            for (int r = 0; r < static_cast<int>(tbl.size()); ++r) {
+              HFONT tfont = CreateFontW(
+                  m.cell_h, m.advance, 0, 0, (r == 0) ? FW_BOLD : FW_NORMAL,
+                  FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN,
+                  L"Consolas");
+              SelectObject(hdc, tfont);
+              for (int c = 0; c < static_cast<int>(tbl[r].size()); ++c) {
+                const int x = tx + c * col_w, y = ty + r * row_h;
+                Rectangle(hdc, x, y, x + col_w, y + row_h);
+                std::wstring w(tbl[r][c].begin(), tbl[r][c].end());
+                TextOutW(hdc, x + 4, y + 2, w.c_str(),
+                         static_cast<int>(w.size()));
+              }
+              SelectObject(hdc, old_font);
+              DeleteObject(tfont);
+            }
+            SelectObject(hdc, old_pen);
+            DeleteObject(pen);
+            SelectObject(hdc, old_brush);
+          }
+        }
       }
       EndPaint(hwnd, &ps);
       return 0;
