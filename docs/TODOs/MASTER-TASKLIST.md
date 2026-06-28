@@ -61,9 +61,10 @@ Drive exactly one per the mode; fire the matching event.
       NO-OP (no merge); in-cell text-sel + cell-BLOCK Delete/type clears contents, caret to anchor cell.
       Verified: 'QtyZ' typed (results/blite-cell-edit.png); Shift+Down block + Delete clears Qty+'2'
       (results/blite-cell-cleared.png); rows/cols intact; no crash. Ctrl+word moves -> deferred follow-up.
-## Phase E6 — Tab / Shift+Tab / Ctrl+Tab (Word model, D5)
-- [ ] Tab ⇒ next cell + select its whole text; Shift+Tab ⇒ previous cell + select; Tab in the last
-      cell ⇒ append a row, caret to its first cell; Ctrl+Tab ⇒ literal tab char in the cell.
+## Phase E6 — Tab / Shift+Tab / Ctrl+Tab (Word model, D5) — DONE PROVEN
+- [x] Tab -> next cell + select whole text (uiaprobe_select GetText='Item'); Tab in the last cell ->
+      append a row (RowCount 3->4, results/blite-new-row.png); Shift+Tab -> previous cell; Ctrl+Tab ->
+      literal tab. No crash.
 ## Phase E7 — Body↔table Shift (D3: snap to whole cells)
 - [ ] Shift-extend from body INTO the table ⇒ select whole cells (snap the rectangle), never a
       half-selected cell from outside.

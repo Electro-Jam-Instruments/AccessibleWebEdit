@@ -396,6 +396,44 @@ class MockCanvasEditor {
     if (caret_ > static_cast<int>(text_.size()))
       caret_ = static_cast<int>(text_.size());
   }
+  // Tab in a table (Word model, D5): move to the adjacent cell and SELECT its
+  // whole text; Tab in the last cell appends a row. SelectWholeCell makes an
+  // in-cell text selection [0, len] (collapsed if the cell is empty).
+  void SelectWholeCell() {
+    anchor_in_table_ = true;
+    anchor_tr_ = tr_;
+    anchor_tc_ = tc_;
+    anchor_cell_off_ = 0;
+    cell_off_ = cur_cell_len();
+  }
+  void TabNext() {
+    if (!in_table_)
+      return;  // body Tab: no-op for now (table-focused)
+    if (tc_ < table_cols() - 1) {
+      ++tc_;
+    } else if (tr_ < table_rows() - 1) {
+      ++tr_;
+      tc_ = 0;
+    } else {
+      table_.push_back(std::vector<std::string>(table_cols(), ""));  // new row
+      tr_ = table_rows() - 1;
+      tc_ = 0;
+    }
+    SelectWholeCell();
+  }
+  void TabPrev() {
+    if (!in_table_)
+      return;
+    if (tc_ > 0)
+      --tc_;
+    else if (tr_ > 0) {
+      --tr_;
+      tc_ = table_cols() - 1;
+    } else
+      return;  // no-op at the first cell
+    SelectWholeCell();
+  }
+
   void CaretHome() {
     if (in_table_)
       cell_off_ = 0;
@@ -1819,6 +1857,18 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
           case VK_DOWN: ed->CaretDown(); is_move = true; break;
           case VK_HOME: ed->CaretHome(); is_move = true; break;
           case VK_END: ed->CaretEnd(); is_move = true; break;
+          case VK_TAB: {
+            const bool ctrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            if (ctrl) {
+              ed->InsertText("\t");  // Ctrl+Tab -> literal tab in the cell
+              text_changed = true;
+            } else if (shift) {
+              ed->TabPrev();  // Shift+Tab -> previous cell + select
+            } else {
+              ed->TabNext();  // Tab -> next cell (+ new row at the end) + select
+            }
+            break;
+          }
           default: handled = false; break;
         }
         // Shift extends the selection (anchor pinned); a plain move collapses it.
