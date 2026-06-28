@@ -186,10 +186,12 @@ class MockCanvasEditor {
   // text reachable by a screen reader; caret-in-cell editing comes later.
   const std::vector<std::vector<std::string>>& table() const { return table_; }
 
-  // The pre-selected table cell (row, col) -- Phase 4.2. Drives BOTH the a11y
-  // kSelected state (Bridge) and the highlight (WM_PAINT), so painted selection
-  // == announced selection.
-  std::pair<int, int> selected_cell() const { return {1, 1}; }
+  // The active table cell (row, col) when the caret is in the table, else
+  // {-1,-1}. Drives BOTH the a11y kSelected state + cell focus (Bridge) and the
+  // highlight (WM_PAINT), so painted selection == announced selection.
+  std::pair<int, int> selected_cell() const {
+    return in_table_ ? std::make_pair(tr_, tc_) : std::make_pair(-1, -1);
+  }
 
   const std::string& text() const { return text_; }
 
@@ -263,6 +265,92 @@ class MockCanvasEditor {
   void CaretHome() { caret_ = 0; }
   void CaretEnd() { caret_ = static_cast<int>(text_.size()); }
 
+  // Move the caret one line up (dir=-1) or down (dir=+1), preserving the column.
+  // Returns false if there is no line in that direction (caller may then enter the
+  // table on a downward move past the last body line).
+  bool CaretVertical(int dir) {
+    int line = 0, col = 0;
+    for (int i = 0; i < caret_ && i < static_cast<int>(text_.size()); ++i) {
+      if (text_[i] == '\n') {
+        ++line;
+        col = 0;
+      } else {
+        ++col;
+      }
+    }
+    const int target = line + dir;
+    if (target < 0)
+      return false;
+    int ln = 0, s = 0;
+    const int n = static_cast<int>(text_.size());
+    for (int i = 0; i <= n; ++i) {
+      if (i == n || text_[i] == '\n') {
+        if (ln == target) {
+          const int len = i - s;
+          caret_ = s + (col < len ? col : len);
+          return true;
+        }
+        ++ln;
+        s = i + 1;
+      }
+    }
+    return false;  // no line in that direction
+  }
+
+  // --- caret navigation incl. INTO the table (Phase 4 caret-in-cell) --------
+  // The caret is either in the body text (in_table_=false, offset caret_) or on a
+  // table CELL cursor (in_table_=true, cell (tr_,tc_)). Arrows move within the
+  // current region and transition at the boundaries (Down past the last body line
+  // enters the table; Up from the top table row returns to the body).
+  bool in_table() const { return in_table_; }
+  int table_rows() const { return static_cast<int>(table_.size()); }
+  int table_cols() const {
+    return table_.empty() ? 0 : static_cast<int>(table_[0].size());
+  }
+
+  void CaretLeft() {
+    if (!in_table_) {
+      MoveCaret(-1);
+    } else if (tc_ > 0) {
+      --tc_;
+    } else if (tr_ > 0) {
+      --tr_;
+      tc_ = table_cols() - 1;
+    }
+  }
+  void CaretRight() {
+    if (!in_table_) {
+      MoveCaret(1);
+    } else if (tc_ < table_cols() - 1) {
+      ++tc_;
+    } else if (tr_ < table_rows() - 1) {
+      ++tr_;
+      tc_ = 0;
+    }
+  }
+  void CaretUp() {
+    if (in_table_) {
+      if (tr_ > 0) {
+        --tr_;
+      } else {
+        in_table_ = false;  // leave the table back into the body (at its end)
+        caret_ = static_cast<int>(text_.size());
+      }
+    } else {
+      CaretVertical(-1);
+    }
+  }
+  void CaretDown() {
+    if (in_table_) {
+      if (tr_ < table_rows() - 1)
+        ++tr_;
+    } else if (!CaretVertical(1) && !table_.empty()) {
+      in_table_ = true;  // past the last body line -> enter the table
+      tr_ = 0;
+      tc_ = 0;
+    }
+  }
+
   // --- formatting (per-character) ------------------------------------------
   CharStyle style_at(int i) const {
     return (i >= 0 && i < static_cast<int>(styles_.size())) ? styles_[i]
@@ -312,6 +400,9 @@ class MockCanvasEditor {
   // Demo table (Phase 4): table_[row][col] = cell text. Header row + 2 data rows.
   std::vector<std::vector<std::string>> table_ = {
       {"Qty", "Item"}, {"2", "Apples"}, {"6", "Bananas"}};
+  // Caret-in-table state: when in_table_, the caret is the cell cursor (tr_,tc_).
+  bool in_table_ = false;
+  int tr_ = 0, tc_ = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -592,8 +683,10 @@ class Bridge {
     }
 
     // TABLE (Phase 4): kTable -> kRow -> kCell(text). Row/col counts on the table,
-    // row/col index + 1x1 span on each cell -> UIA Grid/Table + GridItem. Cells
-    // carry their text via EmitRawText. (Not in the caret flow yet -- 4.1.)
+    // row/col index + 1x1 span on each cell -> UIA Grid/Table + GridItem. The
+    // active cell (when the caret is in the table) becomes focused so NVDA reads
+    // it on entry/navigation.
+    int active_cell_id = 0, active_cell_inline = 0;
     const auto& tbl = editor.table();
     if (!tbl.empty()) {
       const int n_rows = static_cast<int>(tbl.size());
@@ -624,6 +717,7 @@ class Bridge {
           // SelectionItem pattern -> Phase 4.2 cell selection).
           cell.role = (r == 0) ? ax::mojom::Role::kColumnHeader
                                : ax::mojom::Role::kGridCell;
+          cell.AddState(ax::mojom::State::kFocusable);  // cell can hold the caret
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowIndex, r);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnIndex, c);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowSpan, 1);
@@ -633,10 +727,16 @@ class Bridge {
           // Phase 4.2: pre-select one data cell to exercise the Selection
           // pattern (GetSelection returns it; ISelectionItemProvider reports
           // IsSelected; the visual highlights the same cell).
-          if (r == editor.selected_cell().first &&
-              c == editor.selected_cell().second)
+          const bool is_active = r == editor.selected_cell().first &&
+                                 c == editor.selected_cell().second;
+          if (is_active)
             cell.AddBoolAttribute(ax::mojom::BoolAttribute::kSelected, true);
-          EmitRawText(tbl[r][c], CharStyle{}, &cell.child_ids);
+          const int cell_inline =
+              EmitRawText(tbl[r][c], CharStyle{}, &cell.child_ids);
+          if (is_active) {
+            active_cell_id = cell_id;
+            active_cell_inline = cell_inline;
+          }
           nodes[cell_id] = cell;
           row.child_ids.push_back(cell_id);
         }
@@ -647,14 +747,24 @@ class Bridge {
 
     nodes[kField] = field;
 
-    // Selection: caret -> owning line -> that line's inline box at local offset.
+    // Focus + selection. When the caret is IN the table, focus the active cell
+    // (so NVDA announces "<cell>, selected" on entry/nav) with a degenerate caret
+    // in the cell's text. Otherwise the field is focused and the caret maps to the
+    // owning body line's inline box at its local offset.
     int sel_node = kField, sel_local = 0;
-    const int caret = editor.caret();
-    for (int li = 0; li < static_cast<int>(lines.size()); ++li) {
-      if (caret >= lines[li].start && caret <= lines[li].start + lines[li].len) {
-        sel_node = line_inline[li] ? line_inline[li] : kField;
-        sel_local = caret - lines[li].start;
-        break;
+    if (editor.in_table() && active_cell_id) {
+      update.tree_data.focus_id = active_cell_id;
+      sel_node = active_cell_inline ? active_cell_inline : active_cell_id;
+      sel_local = 0;
+    } else {
+      const int caret = editor.caret();
+      for (int li = 0; li < static_cast<int>(lines.size()); ++li) {
+        if (caret >= lines[li].start &&
+            caret <= lines[li].start + lines[li].len) {
+          sel_node = line_inline[li] ? line_inline[li] : kField;
+          sel_local = caret - lines[li].start;
+          break;
+        }
       }
     }
     update.tree_data.sel_anchor_object_id = sel_node;
@@ -972,6 +1082,17 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
       }
       field->NotifyAccessibilityEvent(ax::mojom::Event::kTextSelectionChanged);
     }
+    // Caret-in-table: fire FOCUS on the active cell so NVDA announces it on entry
+    // and on each cell move; fire FOCUS back on the field when leaving the table.
+    const bool now_in_table = editor_->in_table();
+    if (now_in_table) {
+      if (AXPlatformNode* cell = PlatformNodeFor(tree_->data().focus_id))
+        cell->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
+    } else if (was_in_table_) {
+      if (AXPlatformNode* field = PlatformNodeFor(kField))
+        field->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
+    }
+    was_in_table_ = now_in_table;
     ::InvalidateRect(hwnd_, nullptr, TRUE);
   }
 
@@ -1108,6 +1229,7 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
   raw_ptr<Bridge> bridge_ = nullptr;            // for client-write actions
   bool pending_sync_ = false;          // a keystroke edit awaits loop-level sync
   bool pending_text_changed_ = false;  // ...and whether the text (not just caret) changed
+  bool was_in_table_ = false;          // caret was in the table on the last sync
   std::unique_ptr<AXFragmentRootWin> fragment_root_;
   std::map<AXNodeID, std::unique_ptr<BliteNodeDelegate>> delegates_;
 };
@@ -1383,12 +1505,16 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
           SelectObject(hdc, old_font);
           DeleteObject(mfont);
         }
-        // Caret: a filled vertical bar at the layout caret rect.
-        RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
-                   lay.caret.y + lay.caret.h};
-        HBRUSH caret_brush = CreateSolidBrush(RGB(0, 0, 0));
-        FillRect(hdc, &cr, caret_brush);
-        DeleteObject(caret_brush);
+        // Caret: a filled vertical bar at the layout caret rect -- only when the
+        // caret is in the BODY text; in the table the highlighted cell is the
+        // cursor (drawn below).
+        if (!ed.in_table()) {
+          RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
+                     lay.caret.y + lay.caret.h};
+          HBRUSH caret_brush = CreateSolidBrush(RGB(0, 0, 0));
+          FillRect(hdc, &cr, caret_brush);
+          DeleteObject(caret_brush);
+        }
         // TABLE visual (4.1): a simple grid with cell text, below the text blocks.
         // The header row (row 0) is bold. Geometry is separate from the text
         // LayOut for now (the table is not yet in the caret flow).
@@ -1471,8 +1597,10 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
           case VK_BACK: text_changed = ed->Backspace(); break;
           case VK_DELETE: text_changed = ed->DeleteForward(); break;
           case VK_RETURN: ed->InsertText("\n"); text_changed = true; break;
-          case VK_LEFT: ed->MoveCaret(-1); break;
-          case VK_RIGHT: ed->MoveCaret(1); break;
+          case VK_LEFT: ed->CaretLeft(); break;
+          case VK_RIGHT: ed->CaretRight(); break;
+          case VK_UP: ed->CaretUp(); break;
+          case VK_DOWN: ed->CaretDown(); break;
           case VK_HOME: ed->CaretHome(); break;
           case VK_END: ed->CaretEnd(); break;
           default: handled = false; break;
