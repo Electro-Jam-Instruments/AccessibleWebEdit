@@ -135,10 +135,27 @@ struct StyleRun {
   CharStyle style;
 };
 
+// Block-level structure (Phase 3.2+). Each LINE of the buffer is one block. A
+// paragraph is its own block; consecutive list lines of the same kind group into
+// one list. (Headings 3.3 will add kHeading with a level.)
+enum class BlockType { kParagraph, kBullet, kNumber };
+
+// A maximal run of same-type lines. A paragraph is a 1-line group; a run of
+// kBullet/kNumber lines is one list group (ordered? = kNumber).
+struct BlockGroup {
+  BlockType type = BlockType::kParagraph;
+  int first_line = 0;  // 0-based line index of the group's first line
+  int line_count = 1;
+  bool is_list() const {
+    return type == BlockType::kBullet || type == BlockType::kNumber;
+  }
+};
+
 class MockCanvasEditor {
  public:
-  // Initial content is intentionally MIXED-FORMAT (two style runs) to exercise
-  // per-run attributes: "Bold" (bold) + " plain" (no bold). Single line for now.
+  // Initial content is MIXED-FORMAT (two style runs): "Bold" (bold) + " plain".
+  // Block model below is scaffolding for 3.2 lists; this single line is one
+  // paragraph block. The list demo doc lands with the block-level Bridge.
   MockCanvasEditor() {
     text_ = "Bold plain";
     caret_ = static_cast<int>(text_.size());
@@ -151,6 +168,33 @@ class MockCanvasEditor {
   }
 
   const std::string& text() const { return text_; }
+
+  // The block type of a given 0-based line (default paragraph past the vector).
+  BlockType block_of_line(int line) const {
+    return (line >= 0 && line < static_cast<int>(line_blocks_.size()))
+               ? line_blocks_[line]
+               : BlockType::kParagraph;
+  }
+
+  // Group lines into blocks: each paragraph is its own group; consecutive list
+  // lines of the SAME kind form one list group. Used by the Bridge to build
+  // kList/kListItem nodes and by WM_PAINT to draw markers.
+  std::vector<BlockGroup> block_groups() const {
+    int line_count = 1;
+    for (char c : text_)
+      if (c == '\n')
+        ++line_count;
+    std::vector<BlockGroup> out;
+    for (int ln = 0; ln < line_count; ++ln) {
+      const BlockType bt = block_of_line(ln);
+      const bool list = (bt == BlockType::kBullet || bt == BlockType::kNumber);
+      if (!out.empty() && list && out.back().type == bt)
+        ++out.back().line_count;  // extend the current list
+      else
+        out.push_back({bt, ln, 1});  // new paragraph or new list
+    }
+    return out;
+  }
   int caret() const { return caret_; }
 
   void InsertText(const std::string& s) {
@@ -237,6 +281,8 @@ class MockCanvasEditor {
       std::vector<CharStyle>(5, CharStyle{true, true, true});
   int caret_ = 5;
   CharStyle typing_style_ = CharStyle{true, true, true};
+  // Per-line block type (parallel to the lines of text_). Empty => all paragraph.
+  std::vector<BlockType> line_blocks_;
 };
 
 // ---------------------------------------------------------------------------
