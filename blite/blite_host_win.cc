@@ -60,12 +60,14 @@
 #include <uiautomation.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "base/at_exit.h"
@@ -186,12 +188,31 @@ class MockCanvasEditor {
   // text reachable by a screen reader; caret-in-cell editing comes later.
   const std::vector<std::vector<std::string>>& table() const { return table_; }
 
-  // The active table cell (row, col) when the caret is in the table, else
-  // {-1,-1}. Drives BOTH the a11y kSelected state + cell focus (Bridge) and the
-  // highlight (WM_PAINT), so painted selection == announced selection.
-  std::pair<int, int> selected_cell() const {
+  // The cell the CARET is in (row,col) when in the table, else {-1,-1}. Drives
+  // cell focus + the in-cell caret. A collapsed caret in a cell is a TEXT
+  // position, NOT a cell selection (doc 18).
+  std::pair<int, int> caret_cell() const {
     return in_table_ ? std::make_pair(tr_, tc_) : std::make_pair(-1, -1);
   }
+  int cell_off() const { return cell_off_; }
+  // The cell-BLOCK selection rectangle (inclusive), or {-1,-1,-1,-1} if none.
+  // Empty until Shift cell-selection (phase E4); drives kSelected + the block
+  // highlight. (E1: a bare caret never block-selects.)
+  std::tuple<int, int, int, int> selected_block() const {
+    return {-1, -1, -1, -1};
+  }
+  bool cell_in_block(int r, int c) const {
+    auto [r0, c0, r1, c1] = selected_block();
+    return r0 >= 0 && r >= r0 && r <= r1 && c >= c0 && c <= c1;
+  }
+  const std::string& cell_text(int r, int c) const {
+    static const std::string kEmpty;
+    if (r >= 0 && r < static_cast<int>(table_.size()) && c >= 0 &&
+        c < static_cast<int>(table_[r].size()))
+      return table_[r][c];
+    return kEmpty;
+  }
+  int cur_cell_len() const { return static_cast<int>(cell_text(tr_, tc_).size()); }
 
   const std::string& text() const { return text_; }
 
@@ -262,8 +283,18 @@ class MockCanvasEditor {
     if (caret_ > static_cast<int>(text_.size()))
       caret_ = static_cast<int>(text_.size());
   }
-  void CaretHome() { caret_ = 0; }
-  void CaretEnd() { caret_ = static_cast<int>(text_.size()); }
+  void CaretHome() {
+    if (in_table_)
+      cell_off_ = 0;
+    else
+      caret_ = 0;
+  }
+  void CaretEnd() {
+    if (in_table_)
+      cell_off_ = cur_cell_len();
+    else
+      caret_ = static_cast<int>(text_.size());
+  }
 
   // Move the caret one line up (dir=-1) or down (dir=+1), preserving the column.
   // Returns false if there is no line in that direction (caller may then enter the
@@ -311,43 +342,57 @@ class MockCanvasEditor {
   void CaretLeft() {
     if (!in_table_) {
       MoveCaret(-1);
+      return;
+    }
+    if (cell_off_ > 0) {
+      --cell_off_;  // within the cell text
     } else if (tc_ > 0) {
       --tc_;
+      cell_off_ = cur_cell_len();  // end of the previous cell
     } else if (tr_ > 0) {
       --tr_;
       tc_ = table_cols() - 1;
-    }
+      cell_off_ = cur_cell_len();
+    }  // at (0,0,0): stay
   }
   void CaretRight() {
     if (!in_table_) {
       MoveCaret(1);
+      return;
+    }
+    if (cell_off_ < cur_cell_len()) {
+      ++cell_off_;  // within the cell text
     } else if (tc_ < table_cols() - 1) {
       ++tc_;
+      cell_off_ = 0;  // start of the next cell
     } else if (tr_ < table_rows() - 1) {
       ++tr_;
       tc_ = 0;
-    }
+      cell_off_ = 0;
+    }  // at the last cell end: stay
   }
   void CaretUp() {
-    if (in_table_) {
-      if (tr_ > 0) {
-        --tr_;
-      } else {
-        in_table_ = false;  // leave the table back into the body (at its end)
-        caret_ = static_cast<int>(text_.size());
-      }
-    } else {
+    if (!in_table_) {
       CaretVertical(-1);
+    } else if (tr_ > 0) {
+      --tr_;  // up a row, keep column best-effort (D1)
+      cell_off_ = std::min(cell_off_, cur_cell_len());
+    } else {
+      in_table_ = false;  // leave the table back into the body (at its end)
+      caret_ = static_cast<int>(text_.size());
     }
   }
   void CaretDown() {
     if (in_table_) {
-      if (tr_ < table_rows() - 1)
+      if (tr_ < table_rows() - 1) {
         ++tr_;
+        cell_off_ = std::min(cell_off_, cur_cell_len());
+      }
     } else if (!CaretVertical(1) && !table_.empty()) {
-      in_table_ = true;  // past the last body line -> enter the table
+      in_table_ = true;  // past the last body line -> enter the table top-left
       tr_ = 0;
       tc_ = 0;
+      cell_off_ = 0;
     }
   }
 
@@ -400,9 +445,10 @@ class MockCanvasEditor {
   // Demo table (Phase 4): table_[row][col] = cell text. Header row + 2 data rows.
   std::vector<std::vector<std::string>> table_ = {
       {"Qty", "Item"}, {"2", "Apples"}, {"6", "Bananas"}};
-  // Caret-in-table state: when in_table_, the caret is the cell cursor (tr_,tc_).
+  // Caret-in-table state: when in_table_, the caret is a TEXT position inside
+  // cell (tr_,tc_) at character offset cell_off_ (a real caret in the cell text).
   bool in_table_ = false;
-  int tr_ = 0, tc_ = 0;
+  int tr_ = 0, tc_ = 0, cell_off_ = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -686,7 +732,7 @@ class Bridge {
     // row/col index + 1x1 span on each cell -> UIA Grid/Table + GridItem. The
     // active cell (when the caret is in the table) becomes focused so NVDA reads
     // it on entry/navigation.
-    int active_cell_id = 0, active_cell_inline = 0;
+    int caret_cell_id = 0, caret_cell_inline = 0;
     const auto& tbl = editor.table();
     if (!tbl.empty()) {
       const int n_rows = static_cast<int>(tbl.size());
@@ -727,15 +773,17 @@ class Bridge {
           // Phase 4.2: pre-select one data cell to exercise the Selection
           // pattern (GetSelection returns it; ISelectionItemProvider reports
           // IsSelected; the visual highlights the same cell).
-          const bool is_active = r == editor.selected_cell().first &&
-                                 c == editor.selected_cell().second;
-          if (is_active)
+          // CELL-BLOCK selection (Shift, phase E4) -> kSelected. A bare caret in
+          // a cell does NOT select the cell (it's a text position).
+          if (editor.cell_in_block(r, c))
             cell.AddBoolAttribute(ax::mojom::BoolAttribute::kSelected, true);
           const int cell_inline =
               EmitRawText(tbl[r][c], CharStyle{}, &cell.child_ids);
-          if (is_active) {
-            active_cell_id = cell_id;
-            active_cell_inline = cell_inline;
+          // The cell holding the caret -> focused, with the caret inside its text.
+          if (r == editor.caret_cell().first &&
+              c == editor.caret_cell().second) {
+            caret_cell_id = cell_id;
+            caret_cell_inline = cell_inline;
           }
           nodes[cell_id] = cell;
           row.child_ids.push_back(cell_id);
@@ -752,10 +800,10 @@ class Bridge {
     // in the cell's text. Otherwise the field is focused and the caret maps to the
     // owning body line's inline box at its local offset.
     int sel_node = kField, sel_local = 0;
-    if (editor.in_table() && active_cell_id) {
-      update.tree_data.focus_id = active_cell_id;
-      sel_node = active_cell_inline ? active_cell_inline : active_cell_id;
-      sel_local = 0;
+    if (editor.in_table() && caret_cell_id) {
+      update.tree_data.focus_id = caret_cell_id;
+      sel_node = caret_cell_inline ? caret_cell_inline : caret_cell_id;
+      sel_local = editor.cell_off();  // real text caret inside the cell
     } else {
       const int caret = editor.caret();
       for (int li = 0; li < static_cast<int>(lines.size()); ++li) {
@@ -1541,10 +1589,9 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
               SelectObject(hdc, tfont);
               for (int c = 0; c < static_cast<int>(tbl[r].size()); ++c) {
                 const int x = tx + c * col_w, y = ty + r * row_h;
-                // Highlight the SELECTED cell (4.2) -- same cell the a11y marks
-                // kSelected, so painted selection == announced selection.
-                if (r == ed.selected_cell().first &&
-                    c == ed.selected_cell().second) {
+                // Block-SELECTED cells (Shift, E4) get the highlight -- same cells
+                // the a11y marks kSelected (painted == announced selection).
+                if (ed.cell_in_block(r, c)) {
                   RECT hl = {x + 1, y + 1, x + col_w, y + row_h};
                   HBRUSH sb = CreateSolidBrush(RGB(173, 214, 255));  // light blue
                   FillRect(hdc, &hl, sb);
@@ -1554,6 +1601,15 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
                 std::wstring w(tbl[r][c].begin(), tbl[r][c].end());
                 TextOutW(hdc, x + 4, y + 2, w.c_str(),
                          static_cast<int>(w.size()));
+                // Caret bar INSIDE the cell holding the caret, at cell_off (E1).
+                if (ed.in_table() && r == ed.caret_cell().first &&
+                    c == ed.caret_cell().second) {
+                  const int cx = x + 4 + ed.cell_off() * m.advance;
+                  RECT cb = {cx, y + 2, cx + 2, y + 2 + m.cell_h};
+                  HBRUSH cbsh = CreateSolidBrush(RGB(0, 0, 0));
+                  FillRect(hdc, &cb, cbsh);
+                  DeleteObject(cbsh);
+                }
               }
               SelectObject(hdc, old_font);
               DeleteObject(tfont);

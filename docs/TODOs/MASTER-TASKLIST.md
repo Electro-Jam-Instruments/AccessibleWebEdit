@@ -33,15 +33,15 @@ Selection rule (doc 18): same-cell ⇒ TEXT selection (AXTreeData anchor/focus -
 ITextRangeProvider); cross-cell ⇒ CELL block (per-cell kSelected -> ISelectionProvider2).
 Drive exactly one per the mode; fire the matching event.
 
-## Phase E1 — Text caret INSIDE a cell  [foundational]
-- [ ] Editor: unify the caret to a Position (body offset OR cell (row,col)+cell_off) + an
+## Phase E1 — Text caret INSIDE a cell  [foundational] — DONE PROVEN
+- [x] Editor: caret to a Position (body offset OR cell (row,col)+cell_off) + an
       `anchor_` + `desired_col_`. Replace the whole-cell cursor (commit 12e0ac8) with a real
       char-level caret in the cell's text. Left/Right/Home/End move within the cell; at the cell
       text edge, cross to the adjacent cell (D2 column-match on vertical entry; D1 preserve column).
-- [ ] Bridge: when the caret is in a cell, set sel anchor/focus to that cell's INLINE BOX at
+- [x] Bridge: when the caret is in a cell, set sel anchor/focus to that cell's INLINE BOX at
       `cell_off` (a real degenerate text caret in the cell), focus_id = the cell. No kSelected for a
       collapsed caret.
-- [ ] probe: a caret-position probe (Text pattern GetSelection degenerate range inside the cell; the
+- [x] probe: degenerate caret in cell (uiaprobe_select BEFORE = 1px caret), 0 cells selected; NVDA: 'table, row, Qty, column header, row 1, column 1' (results/nvda-e1-PROVEN.log); caret bar in cell (results/blite-cell-caret.png). [orig: a caret-position probe (Text pattern GetSelection degenerate range inside the cell; the
       cell is the enclosing element). NVDA: arrowing reads the cell's characters. visual: caret bar
       drawn inside the cell at `cell_off` (not the whole-cell highlight).
 ## Phase E2 — Shift-selection in BODY text
