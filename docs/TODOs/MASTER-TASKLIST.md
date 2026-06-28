@@ -49,14 +49,13 @@ Drive exactly one per the mode; fire the matching event.
       replace a non-empty selection. (Home/End line-relative + Ctrl word moves -> deferred to E5.)
 - [x] Bridge maps anchor+focus to a real range; probe GetSelection='Groc'; NVDA 'G selected','r selected',
       'o selected','c selected' (results/nvda-e2-PROVEN.log); highlight on 'Groc' (results/blite-body-select.png).
-## Phase E3 — Shift-selection INSIDE one cell (text mode, bounded to the cell)
-- [ ] Same as E2 but the focus stays in the cell; selection is the cell's inner text range.
-## Phase E4 — Promote to CELL-BLOCK on boundary cross
-- [ ] When the Shift focus crosses into another cell, flip to cell mode: set kSelected on the
-      anchor-cell↔focus-cell rectangle, collapse the text range to the focus cell, fire the grid
-      `kSelectedChildrenChanged` + focus-cell `kFocus`. Demote back to text when focus re-enters the
-      anchor cell. probe: container GetSelection returns the block cells; ISelectionProvider2
-      First/Last/Current. NVDA: cells announced. visual: fill the whole block.
+## Phase E3 — Shift-selection INSIDE one cell — DONE PROVEN
+- [x] Same-cell Shift = text range on the cell's inline box; uiaprobe_select GetText='Qt'; partial highlight
+      (results/blite-cell-text-sel.png). NVDA text-selection mechanism proven by E2.
+## Phase E4 — Promote to CELL-BLOCK on boundary cross — DONE PROVEN
+- [x] Cross-cell Shift flips to cell mode: kSelected on the anchor↔focus rectangle, text range collapsed,
+      focus-cell kFocus. probe: GetCurrentSelection = 2 cells (Qty + '2'); NVDA 'Qty, column header,
+      selected, row 1, column 1' (results/nvda-e34-PROVEN.log); block highlight (results/blite-cell-block.png).
 ## Phase E5 — Delete/Backspace + word moves (D4)
 - [ ] Caret in cell: Backspace at cell start / Delete at cell end = NO-OP (no cross-cell merge).
       Text selection ⇒ delete text. Cell block ⇒ clear the selected cells' contents (keep rows/cols),

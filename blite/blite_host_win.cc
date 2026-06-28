@@ -196,12 +196,24 @@ class MockCanvasEditor {
     return in_table_ ? std::make_pair(tr_, tc_) : std::make_pair(-1, -1);
   }
   int cell_off() const { return cell_off_; }
-  // The cell-BLOCK selection rectangle (inclusive), or {-1,-1,-1,-1} if none.
-  // Empty until Shift cell-selection (phase E4); drives kSelected + the block
-  // highlight. (E1: a bare caret never block-selects.)
+  int anchor_cell_off() const { return anchor_cell_off_; }
+  // CELL-BLOCK selection rectangle (inclusive) -- only when caret AND anchor are
+  // BOTH in the table and in DIFFERENT cells (cross-cell ⇒ cells, doc 18 / E4).
+  // Else {-1,-1,-1,-1} (a same-cell selection is TEXT, not a block).
   std::tuple<int, int, int, int> selected_block() const {
+    if (in_table_ && anchor_in_table_ &&
+        !(anchor_tr_ == tr_ && anchor_tc_ == tc_))
+      return {std::min(anchor_tr_, tr_), std::min(anchor_tc_, tc_),
+              std::max(anchor_tr_, tr_), std::max(anchor_tc_, tc_)};
     return {-1, -1, -1, -1};
   }
+  // A TEXT selection WITHIN one cell (same cell, different offsets) -- E3.
+  bool has_cell_text_sel() const {
+    return in_table_ && anchor_in_table_ && anchor_tr_ == tr_ &&
+           anchor_tc_ == tc_ && anchor_cell_off_ != cell_off_;
+  }
+  int cell_sel_lo() const { return std::min(anchor_cell_off_, cell_off_); }
+  int cell_sel_hi() const { return std::max(anchor_cell_off_, cell_off_); }
   bool cell_in_block(int r, int c) const {
     auto [r0, c0, r1, c1] = selected_block();
     return r0 >= 0 && r >= r0 && r <= r1 && c >= c0 && c <= c1;
@@ -252,7 +264,17 @@ class MockCanvasEditor {
   bool has_text_sel() const { return !in_table_ && anchor_off_ != caret_; }
   int sel_lo() const { return std::min(anchor_off_, caret_); }
   int sel_hi() const { return std::max(anchor_off_, caret_); }
-  void Collapse() { anchor_off_ = caret_; }  // drop the selection (anchor=caret)
+  // Drop the selection: anchor := caret, in whichever region the caret is.
+  void Collapse() {
+    anchor_in_table_ = in_table_;
+    if (in_table_) {
+      anchor_tr_ = tr_;
+      anchor_tc_ = tc_;
+      anchor_cell_off_ = cell_off_;
+    } else {
+      anchor_off_ = caret_;
+    }
+  }
   void CollapseToStart() { caret_ = sel_lo(); anchor_off_ = caret_; }
   void CollapseToEnd() { caret_ = sel_hi(); anchor_off_ = caret_; }
   bool DeleteSelectionIfAny() {
@@ -486,6 +508,9 @@ class MockCanvasEditor {
   // cell (tr_,tc_) at character offset cell_off_ (a real caret in the cell text).
   bool in_table_ = false;
   int tr_ = 0, tc_ = 0, cell_off_ = 0;
+  // Table selection anchor (mirrors the caret's table state); set by Collapse().
+  bool anchor_in_table_ = false;
+  int anchor_tr_ = 0, anchor_tc_ = 0, anchor_cell_off_ = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -839,10 +864,21 @@ class Bridge {
     if (editor.in_table() && caret_cell_id) {
       update.tree_data.focus_id = caret_cell_id;
       const int n = caret_cell_inline ? caret_cell_inline : caret_cell_id;
-      update.tree_data.sel_anchor_object_id = n;
-      update.tree_data.sel_anchor_offset = editor.cell_off();
-      update.tree_data.sel_focus_object_id = n;
-      update.tree_data.sel_focus_offset = editor.cell_off();
+      if (editor.has_cell_text_sel()) {
+        // E3: TEXT selection WITHIN the cell -> a real range on the cell's box.
+        update.tree_data.sel_anchor_object_id = n;
+        update.tree_data.sel_anchor_offset = editor.anchor_cell_off();
+        update.tree_data.sel_focus_object_id = n;
+        update.tree_data.sel_focus_offset = editor.cell_off();
+      } else {
+        // E1 caret OR E4 cell-block: a degenerate text caret at the focus cell.
+        // (Block cells carry kSelected via cell_in_block; the text range stays
+        // collapsed so NVDA reads the cell selection, not partial text.)
+        update.tree_data.sel_anchor_object_id = n;
+        update.tree_data.sel_anchor_offset = editor.cell_off();
+        update.tree_data.sel_focus_object_id = n;
+        update.tree_data.sel_focus_offset = editor.cell_off();
+      }
     } else {
       // Body: map BOTH anchor and focus to (inline box, local offset) so a
       // Shift-selection is a real range (E2), not degenerate.
@@ -1651,6 +1687,17 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
                 if (ed.cell_in_block(r, c)) {
                   RECT hl = {x + 1, y + 1, x + col_w, y + row_h};
                   HBRUSH sb = CreateSolidBrush(RGB(173, 214, 255));  // light blue
+                  FillRect(hdc, &hl, sb);
+                  DeleteObject(sb);
+                }
+                // In-cell TEXT selection (E3): partial highlight in the caret cell.
+                if (ed.in_table() && r == ed.caret_cell().first &&
+                    c == ed.caret_cell().second && ed.has_cell_text_sel()) {
+                  const int hx = x + 4 + ed.cell_sel_lo() * m.advance;
+                  const int hw =
+                      (ed.cell_sel_hi() - ed.cell_sel_lo()) * m.advance;
+                  RECT hl = {hx, y + 2, hx + hw, y + 2 + m.cell_h};
+                  HBRUSH sb = CreateSolidBrush(RGB(173, 214, 255));
                   FillRect(hdc, &hl, sb);
                   DeleteObject(sb);
                 }
