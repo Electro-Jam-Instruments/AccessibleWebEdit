@@ -123,8 +123,10 @@ struct CharStyle {
   bool bold = false;
   bool italic = false;
   bool underline = false;
+  std::string font;  // font family ("" = the editor default, Consolas). Phase 3.4.
   bool operator==(const CharStyle& o) const {
-    return bold == o.bold && italic == o.italic && underline == o.underline;
+    return bold == o.bold && italic == o.italic && underline == o.underline &&
+           font == o.font;
   }
   bool operator!=(const CharStyle& o) const { return !(*this == o); }
 };
@@ -160,12 +162,16 @@ class MockCanvasEditor {
   MockCanvasEditor() {
     text_ = "Groceries\nApples\nBananas\nCherries";
     caret_ = 0;  // caret on the HEADING line so NVDA announces "heading level 1"
-    const CharStyle plain_style{false, false, false};
+    const CharStyle plain_style{false, false, false, ""};
     styles_.assign(text_.size(), plain_style);
     typing_style_ = plain_style;
     line_blocks_ = {BlockType::kHeading, BlockType::kBullet,
                     BlockType::kBullet, BlockType::kBullet};
     line_levels_ = {1, 0, 0, 0};  // line 0 is an <h1>
+    // Phase 3.4: the heading "Groceries" (chars 0-8) uses a distinct font family.
+    const CharStyle heading_style{false, false, false, "Courier New"};
+    for (int i = 0; i < 9 && i < static_cast<int>(styles_.size()); ++i)
+      styles_[i] = heading_style;
   }
 
   // Heading level (1-6) of a line, or 0 if the line is not a heading.
@@ -400,6 +406,10 @@ void FillRunAttributes(AXNodeData& node, const CharStyle& s) {
         ax::mojom::IntAttribute::kTextUnderlineStyle,
         static_cast<int>(ax::mojom::TextDecorationStyle::kSolid));
   }
+  // Per-run FONT FAMILY (Phase 3.4) -> UIA_FontNameAttributeId. Only set when the
+  // run names a font, so default text keeps the system/inherited font.
+  if (!s.font.empty())
+    node.AddStringAttribute(ax::mojom::StringAttribute::kFontFamily, s.font);
 }
 
 // Back-compat overload for the current single-run callers: the first char's style.
@@ -1252,13 +1262,20 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
               LineColOf(t, seg_g, &sline, &scol);
               const bool heading =
                   ed.block_of_line(sline) == BlockType::kHeading;
+              // Per-run FONT FAMILY (3.4): paint with the run's font, else the
+              // editor default Consolas. (Demo fonts are monospace so the forced
+              // advance still lines up with the layout / a11y geometry.)
+              const std::wstring face =
+                  r.style.font.empty()
+                      ? L"Consolas"
+                      : std::wstring(r.style.font.begin(), r.style.font.end());
               HFONT font = CreateFontW(
                   heading ? m.cell_h + 6 : m.cell_h, m.advance, 0, 0,
                   (r.style.bold || heading) ? FW_BOLD : FW_NORMAL,
                   r.style.italic ? TRUE : FALSE,
                   r.style.underline ? TRUE : FALSE, FALSE, DEFAULT_CHARSET,
                   OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                  FIXED_PITCH | FF_MODERN, L"Consolas");
+                  FIXED_PITCH | FF_MODERN, face.c_str());
               SelectObject(hdc, font);
               std::wstring w(seg.begin(), seg.end());
               TextOutW(hdc, lay.glyphs[seg_g].x, lay.glyphs[seg_g].y, w.c_str(),

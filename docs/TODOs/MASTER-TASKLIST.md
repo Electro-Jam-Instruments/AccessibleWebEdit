@@ -79,7 +79,7 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
       prove it via probe+NVDA, THEN wire Tab/Enter editing.
 - [x] 3.3 **Heading levels** — DONE PROVEN (infra+probe+NVDA+visual).  -- infra: `kHeading` + `IntAttribute::kHierarchicalLevel` (1-6). probe: UIA
       heading level (AriaProperties/`LevelId`). NVDA: "heading level N". visual: larger/bolder headings.
-- [ ] 3.4 **Fonts & font weights.** infra: `StringAttribute::kFontFamily` + `FloatAttribute::kFontWeight`
+- [x] 3.4 **Fonts & font weights** — DONE PROVEN (kFontFamily per run; FontName='Courier New').  -- infra: `StringAttribute::kFontFamily` + `FloatAttribute::kFontWeight`
       per run. probe: `UIA_FontNameAttributeId` + `UIA_FontWeightAttributeId` per run. NVDA: font/weight
       reported. visual: paint different families/weights.
 

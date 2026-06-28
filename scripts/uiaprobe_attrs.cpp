@@ -28,6 +28,7 @@ static void ReadAttr(IUIAutomationTextRange* r, TEXTATTRIBUTEID id, const wchar_
   switch (v.vt) {
     case VT_I4:   wprintf(L"  %s = %d (VT_I4)\n", name, v.lVal); break;
     case VT_BOOL: wprintf(L"  %s = %s (VT_BOOL)\n", name, v.boolVal ? L"TRUE" : L"FALSE"); break;
+    case VT_BSTR: wprintf(L"  %s = '%s' (VT_BSTR)\n", name, v.bstrVal ? v.bstrVal : L""); break;
     case VT_UNKNOWN: wprintf(L"  %s = <mixed/notsupported>\n", name); break;
     default: wprintf(L"  %s = <vt=%d>\n", name, v.vt); break;
   }
@@ -72,6 +73,7 @@ int main(int argc, char** argv) {
     BSTR rt = nullptr; r1->GetText(40, &rt);
     wprintf(L"RUN1 text='%s' attributes:\n", (rt && *rt) ? rt : L"<empty>"); if (rt) SysFreeString(rt);
     ReadAttr(r1, UIA_FontWeightAttributeId, L"  FontWeight");
+    ReadAttr(r1, UIA_FontNameAttributeId, L"  FontName");
     r1->Release();
   }
   // run2 = [firstN, end): clone doc, push Start forward to firstN.
