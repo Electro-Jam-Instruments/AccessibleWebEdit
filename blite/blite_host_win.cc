@@ -112,6 +112,10 @@ constexpr AXNodeID kField = 2;
 constexpr AXNodeID kText = 3;
 constexpr AXNodeID kInline = 4;
 
+// Verbose per-UIA-query tracing ([OnGetObject] etc.) OFF by default -- it floods
+// stdout on every NVDA query and makes interaction sluggish. Enable with --debug.
+bool g_debug = false;
+
 // ===========================================================================
 // SURFACE + BRIDGE -- copied verbatim from blite_host.cc so the spine is
 // provably the same code across platforms. Do not diverge these.
@@ -964,7 +968,10 @@ class Bridge {
     // in the cell's text. Otherwise the field is focused and the caret maps to the
     // owning body line's inline box at its local offset.
     if (editor.in_table() && caret_cell_id) {
-      update.tree_data.focus_id = caret_cell_id;
+      // Keep FOCUS on the field (the editable document), NOT the cell: NVDA then
+      // tracks the field's text caret -> reads characters as it moves and
+      // announces the cell when the caret crosses into it (the contenteditable
+      // model). Focusing the cell silenced char-by-char + selection reading.
       const int n = caret_cell_inline ? caret_cell_inline : caret_cell_id;
       if (editor.has_cell_text_sel()) {
         // E3: TEXT selection WITHIN the cell -> a real range on the cell's box.
@@ -1313,17 +1320,26 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
       }
       field->NotifyAccessibilityEvent(ax::mojom::Event::kTextSelectionChanged);
     }
-    // Caret-in-table: fire FOCUS on the active cell so NVDA announces it on entry
-    // and on each cell move; fire FOCUS back on the field when leaving the table.
-    const bool now_in_table = editor_->in_table();
-    if (now_in_table) {
-      if (AXPlatformNode* cell = PlatformNodeFor(tree_->data().focus_id))
-        cell->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
-    } else if (was_in_table_) {
-      if (AXPlatformNode* field = PlatformNodeFor(kField))
-        field->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
+    // Focus stays on the field; NVDA tracks the field caret (above) for char/
+    // selection reading in body AND cells. For a CELL-BLOCK selection, also tell
+    // the grid so NVDA announces the selected cells.
+    auto blk = editor_->selected_block();
+    if (std::get<0>(blk) >= 0) {
+      std::function<AXNode*(AXNode*)> find_grid = [&](AXNode* n) -> AXNode* {
+        if (!n)
+          return nullptr;
+        if (n->GetRole() == ax::mojom::Role::kGrid)
+          return n;
+        for (size_t i = 0; i < n->GetChildCount(); ++i)
+          if (AXNode* g = find_grid(n->GetChildAtIndex(i)))
+            return g;
+        return nullptr;
+      };
+      if (AXNode* grid = find_grid(tree_->root()))
+        if (AXPlatformNode* gp = PlatformNodeFor(grid->id()))
+          gp->NotifyAccessibilityEvent(
+              ax::mojom::Event::kSelectedChildrenChanged);
     }
-    was_in_table_ = now_in_table;
     ::InvalidateRect(hwnd_, nullptr, TRUE);
   }
 
@@ -1397,31 +1413,36 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
   // gfx::NativeViewAccessible == IAccessible* on Windows, so the UIA provider
   // is obtained by QueryInterface, not by a direct assignment.
   LRESULT OnGetObject(WPARAM wparam, LPARAM lparam) {
-    std::cout << "[OnGetObject] lparam=" << static_cast<LONG>(lparam)
-              << " fragment_root=" << (fragment_root_ ? "yes" : "no") << "\n";
+    if (g_debug)
+      std::cout << "[OnGetObject] lparam=" << static_cast<LONG>(lparam)
+                << " fragment_root=" << (fragment_root_ ? "yes" : "no") << "\n";
     if (!fragment_root_)
       return 0;
 
     switch (static_cast<LONG>(lparam)) {
       case UiaRootObjectId: {
         bool enabled = AXPlatform::GetInstance().IsUiaProviderEnabled();
-        std::cout << "[OnGetObject] UiaRootObjectId uia_enabled=" << enabled
-                  << "\n";
+        if (g_debug)
+          std::cout << "[OnGetObject] UiaRootObjectId uia_enabled=" << enabled
+                    << "\n";
         if (!enabled)
           break;
         gfx::NativeViewAccessible root_accessible =
             fragment_root_->GetNativeViewAccessible();
-        std::cout << "[OnGetObject] root_accessible="
-                  << (root_accessible ? "yes" : "NULL") << "\n";
+        if (g_debug)
+          std::cout << "[OnGetObject] root_accessible="
+                    << (root_accessible ? "yes" : "NULL") << "\n";
         if (!root_accessible)
           break;
         Microsoft::WRL::ComPtr<IRawElementProviderSimple> provider;
         HRESULT qi = root_accessible->QueryInterface(IID_PPV_ARGS(&provider));
-        std::cout << "[OnGetObject] QI IRawElementProviderSimple hr=0x"
-                  << std::hex << qi << std::dec << "\n";
+        if (g_debug)
+          std::cout << "[OnGetObject] QI IRawElementProviderSimple hr=0x"
+                    << std::hex << qi << std::dec << "\n";
         if (FAILED(qi))
           break;
-        std::cout << "[OnGetObject] returning NATIVE UIA provider\n";
+        if (g_debug)
+          std::cout << "[OnGetObject] returning NATIVE UIA provider\n";
         return ::UiaReturnRawElementProvider(hwnd_, wparam, lparam,
                                              provider.Get());
       }
@@ -2018,6 +2039,7 @@ int Run() {
   // painted caret and the UIA caret move together as you type. This skips the
   // scripted auto-edit that the probe / NVDA capture runs depend on.
   const bool viewer = ::wcsstr(::GetCommandLineW(), L"--viewer") != nullptr;
+  g_debug = ::wcsstr(::GetCommandLineW(), L"--debug") != nullptr;  // verbose trace
   if (viewer) {
     // GENTLE activation only. Do NOT use the AttachThreadInput foreground-steal
     // trick: it can DEADLOCK against a running screen reader's input hooks (NVDA)
