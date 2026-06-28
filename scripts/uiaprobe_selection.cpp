@@ -108,6 +108,38 @@ int main(int argc, char** argv) {
   wprintf(L"Cell-level SelectionItem.IsSelected walk:\n");
   WalkSelected(grid);
   wprintf(L"  -> %d cell(s) report IsSelected=TRUE\n", g_sel_cells);
+
+  // ISelectionProvider2 (4.2-v2 patch): raw QI on the grid's provider, then read
+  // First/Last/Current selected item + ItemCount. We reach the provider via the
+  // element's IRawElementProviderSimple is not exposed by the client wrapper, so
+  // use the SelectionPattern2-style members through the raw provider QI: the
+  // client lib doesn't wrap v2, so query the native provider via the element's
+  // legacy IAccessibleEx -> provider. Simplest: re-find the provider through the
+  // pattern. Here we just report whether the v2 interface is reachable via the
+  // GetCurrentSelection delta (container now returns the cell if GetSelectedItems
+  // was patched).
+  // ISelectionProvider2 client API (4.2-v2): SelectionPattern2 -> First/Last/
+  // Current selected item + ItemCount.
+  IUIAutomationSelectionPattern2* sp2 = nullptr;
+  if (SUCCEEDED(grid->GetCurrentPatternAs(UIA_SelectionPattern2Id, IID_PPV_ARGS(&sp2))) && sp2) {
+    int count = -1; sp2->get_CurrentItemCount(&count);
+    wprintf(L"SelectionPattern2 present. CurrentItemCount=%d\n", count);
+    IUIAutomationElement* first = nullptr;
+    if (SUCCEEDED(sp2->get_CurrentFirstSelectedItem(&first)) && first) {
+      BSTR n = nullptr; first->get_CurrentName(&n);
+      wprintf(L"  FirstSelectedItem name='%s'\n", n ? n : L""); if (n) SysFreeString(n);
+      first->Release();
+    }
+    IUIAutomationElement* cur = nullptr;
+    if (SUCCEEDED(sp2->get_CurrentCurrentSelectedItem(&cur)) && cur) {
+      BSTR n = nullptr; cur->get_CurrentName(&n);
+      wprintf(L"  CurrentSelectedItem name='%s'\n", n ? n : L""); if (n) SysFreeString(n);
+      cur->Release();
+    }
+    sp2->Release();
+  } else {
+    wprintf(L"SelectionPattern2 NOT available on the client\n");
+  }
   grid->Release();
   root->Release(); g_walker->Release(); uia->Release(); CoUninitialize();
   return 0;

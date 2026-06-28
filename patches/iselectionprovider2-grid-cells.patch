@@ -1,0 +1,153 @@
+diff --git a/ui/accessibility/platform/ax_platform_node_base.cc b/ui/accessibility/platform/ax_platform_node_base.cc
+index b9458b8f42..e8b65f8748 100644
+--- a/ui/accessibility/platform/ax_platform_node_base.cc
++++ b/ui/accessibility/platform/ax_platform_node_base.cc
+@@ -2482,7 +2482,22 @@ int AXPlatformNodeBase::GetSelectedItems(
+   for (auto child_iter = AXPlatformNodeChildrenBegin(),
+             child_end = AXPlatformNodeChildrenEnd();
+        child_iter != child_end && selected_count < max_items; ++child_iter) {
+-    if (!IsItemLike(child_iter->GetRole())) {
++    const ax::mojom::Role child_role = child_iter->GetRole();
++    // AccessibleWebEdit 4.2-v2: a selected GRID CELL is a selected item even
++    // though kGridCell is not "item-like" -- count it directly instead of
++    // recursing past it (so a kGrid enumerates its selected cells).
++    const bool is_selectable_cell =
++        child_role == ax::mojom::Role::kGridCell ||
++        child_role == ax::mojom::Role::kCell ||
++        child_role == ax::mojom::Role::kColumnHeader ||
++        child_role == ax::mojom::Role::kRowHeader;
++    if (is_selectable_cell) {
++      if (child_iter->GetBoolAttribute(ax::mojom::BoolAttribute::kSelected)) {
++        selected_count++;
++        if (out_selected_items)
++          out_selected_items->emplace_back(child_iter.get());
++      }
++    } else if (!IsItemLike(child_role)) {
+       selected_count += child_iter->GetSelectedItems(max_items - selected_count,
+                                                      out_selected_items);
+     } else if (child_iter->GetBoolAttribute(
+diff --git a/ui/accessibility/platform/ax_platform_node_win.cc b/ui/accessibility/platform/ax_platform_node_win.cc
+index 16ab72b1e5..02bc12dcf1 100644
+--- a/ui/accessibility/platform/ax_platform_node_win.cc
++++ b/ui/accessibility/platform/ax_platform_node_win.cc
+@@ -3283,6 +3283,59 @@ IFACEMETHODIMP AXPlatformNodeWin::get_IsSelectionRequired(BOOL* result) {
+   return S_OK;
+ }
+ 
++//
++// ISelectionProvider2 methods (AccessibleWebEdit 4.2-v2). Built over the same
++// GetSelectedItems() that v1 GetSelection() uses, so grid cells enumerate too
++// (see the GetSelectedItems patch in ax_platform_node_base.cc).
++//
++
++IFACEMETHODIMP AXPlatformNodeWin::get_FirstSelectedItem(
++    IRawElementProviderSimple** result) {
++  WIN_ACCESSIBILITY_API_TRACE_EVENT("get_FirstSelectedItem");
++  UIA_VALIDATE_CALL_1_ARG(result);
++  *result = nullptr;
++  std::vector<AXPlatformNodeBase*> selected;
++  int max_items = GetMaxSelectableItems();
++  if (max_items)
++    GetSelectedItems(max_items, &selected);
++  if (selected.empty())
++    return UIA_E_ELEMENTNOTAVAILABLE;
++  return static_cast<AXPlatformNodeWin*>(selected.front())
++      ->QueryInterface(IID_PPV_ARGS(result));
++}
++
++IFACEMETHODIMP AXPlatformNodeWin::get_LastSelectedItem(
++    IRawElementProviderSimple** result) {
++  WIN_ACCESSIBILITY_API_TRACE_EVENT("get_LastSelectedItem");
++  UIA_VALIDATE_CALL_1_ARG(result);
++  *result = nullptr;
++  std::vector<AXPlatformNodeBase*> selected;
++  int max_items = GetMaxSelectableItems();
++  if (max_items)
++    GetSelectedItems(max_items, &selected);
++  if (selected.empty())
++    return UIA_E_ELEMENTNOTAVAILABLE;
++  return static_cast<AXPlatformNodeWin*>(selected.back())
++      ->QueryInterface(IID_PPV_ARGS(result));
++}
++
++IFACEMETHODIMP AXPlatformNodeWin::get_CurrentSelectedItem(
++    IRawElementProviderSimple** result) {
++  // No distinct "current within selection" concept here; report the first.
++  return get_FirstSelectedItem(result);
++}
++
++IFACEMETHODIMP AXPlatformNodeWin::get_ItemCount(int* result) {
++  WIN_ACCESSIBILITY_API_TRACE_EVENT("get_ItemCount");
++  UIA_VALIDATE_CALL_1_ARG(result);
++  std::vector<AXPlatformNodeBase*> selected;
++  int max_items = GetMaxSelectableItems();
++  if (max_items)
++    GetSelectedItems(max_items, &selected);
++  *result = static_cast<int>(selected.size());
++  return S_OK;
++}
++
+ //
+ // ITableItemProvider methods.
+ //
+@@ -8655,6 +8708,14 @@ AXPlatformNodeWin::GetPatternProviderFactoryMethod(PATTERNID pattern_id) {
+       }
+       break;
+ 
++    // AccessibleWebEdit 4.2-v2: advertise SelectionPattern2 so a UIA client can
++    // read First/Last/Current selected item + ItemCount (ISelectionProvider2).
++    case UIA_SelectionPattern2Id:
++      if (IsContainerWithSelectableChildren(GetRole())) {
++        return &PatternProvider<ISelectionProvider2>;
++      }
++      break;
++
+     case UIA_TablePatternId:
+       // Despite the following documentation (as of April 2022)
+       //     https://docs.microsoft.com/en-us/windows/win32/api/uiautomationcore/nn-uiautomationcore-itableprovider
+diff --git a/ui/accessibility/platform/ax_platform_node_win.h b/ui/accessibility/platform/ax_platform_node_win.h
+index 5fdef050eb..efe124a76e 100644
+--- a/ui/accessibility/platform/ax_platform_node_win.h
++++ b/ui/accessibility/platform/ax_platform_node_win.h
+@@ -395,7 +395,10 @@ class COMPONENT_EXPORT(AX_PLATFORM)
+       public IScrollItemProvider,
+       public IScrollProvider,
+       public ISelectionItemProvider,
+-      public ISelectionProvider,
++      // ISelectionProvider2 derives from ISelectionProvider (AccessibleWebEdit
++      // 4.2-v2: expose First/Last/Current selected item + count). Replacing the
++      // direct ISelectionProvider base avoids an ambiguous diamond.
++      public ISelectionProvider2,
+       public IServiceProvider,
+       public ITableItemProvider,
+       public ITableProvider,
+@@ -441,6 +444,7 @@ class COMPONENT_EXPORT(AX_PLATFORM)
+     COM_INTERFACE_ENTRY(IScrollProvider)
+     COM_INTERFACE_ENTRY(ISelectionItemProvider)
+     COM_INTERFACE_ENTRY(ISelectionProvider)
++    COM_INTERFACE_ENTRY(ISelectionProvider2)
+     COM_INTERFACE_ENTRY(ITableItemProvider)
+     COM_INTERFACE_ENTRY(ITableProvider)
+     COM_INTERFACE_ENTRY(IToggleProvider)
+@@ -737,6 +741,21 @@ class COMPONENT_EXPORT(AX_PLATFORM)
+ 
+   IFACEMETHODIMP get_IsSelectionRequired(BOOL* result) override;
+ 
++  //
++  // ISelectionProvider2 methods (AccessibleWebEdit 4.2-v2).
++  //
++
++  IFACEMETHODIMP get_FirstSelectedItem(
++      IRawElementProviderSimple** result) override;
++
++  IFACEMETHODIMP get_LastSelectedItem(
++      IRawElementProviderSimple** result) override;
++
++  IFACEMETHODIMP get_CurrentSelectedItem(
++      IRawElementProviderSimple** result) override;
++
++  IFACEMETHODIMP get_ItemCount(int* result) override;
++
+   //
+   // ITableItemProvider methods.
+   //
