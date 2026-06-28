@@ -53,9 +53,30 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
         announces the focused run (non-atomic reads from the caret). Attr-difference voicing needs NVDA's
         'report font attributes' setting; per-run attrs are probe-proven.
   - [ ] visual: WM_PAINT iterate runs, CreateFontW per run from run.style, draw each run at its layout x.
-- [ ] 3.2 **Bulleted & numbered lists.** infra: `kList` + `kListItem` + `kListMarker` (ordered/unordered).
-      probe: UIA List/ListItem structure + marker text + `SetSize`/`PositionInSet`. NVDA: "list", "bullet",
-      item N of M. visual: paint bullets / numbers.
+- [ ] 3.2 **Bulleted & numbered lists** (block structure — precise design):
+      1. Editor: add per-LINE block type. `enum BlockType { kParagraph, kBullet, kNumber }` + a
+         `std::vector<BlockType> line_blocks_` (one per line, indexed by line number; default kParagraph).
+         Helper `block_runs()` -> contiguous lines of the same list type grouped into a list (start line,
+         count, ordered?). A new line inherits the current line's block type.
+      2. Bridge: this is the FIRST block-level tree (so far field->runs is flat). Build per LINE:
+         a paragraph line -> StaticText run(s) directly under field; a maximal group of kBullet/kNumber lines
+         -> a `kList`(ordered for kNumber) node whose children are `kListItem` nodes; each kListItem has a
+         `kListMarker`(name "•" for bullet, "N." for number) + the line's text run(s). Set
+         `IntAttribute::kPosInSet` (1-based) + `kSetSize` on each kListItem. Field child_ids = the ordered mix
+         of paragraph runs + kList nodes. Keep dynamic ids (reconcile handles add/remove). HidesChildrenFromUIA:
+         the list/listitem/marker ARE navigable (don't hide) -- only text-field/static-text stay leaves; the
+         list is real structure NVDA navigates. (May need to NOT make the field a single flat leaf when it has
+         block children -- reconsider HidesChildrenFromUIA for the field-with-list case.)
+      3. Selection/caret + bounds: map caret global offset -> the owning run's inline box (as today), and the
+         per-line y from LayOut. List markers take an x-indent in LayOut (origin_x + marker_width).
+      4. probe (add `uiaprobe_list.cpp`): walk UIA tree, assert List(50008)->ListItem(50007) with
+         `CurrentPositionInSet`/`CurrentSizeOfSet` + the marker text; ordered list shows numbers.
+      5. NVDA: capture -> "list", "bullet"/number, "N of M", item text. (Re-verify no crash with the reconcile.)
+      6. visual: WM_PAINT draws the marker ("•" / "N.") at the item's indent, text after it; coupled to the
+         same LayOut (marker advance reserved in the line's x).
+      NOTE: lists are NAVIGABLE structure, a departure from the flat-leaf field. Watch the HidesChildrenFromUIA
+      interaction + NVDA browse/focus mode. Start with a fixed demo doc (1 paragraph + a 3-item bullet list),
+      prove it via probe+NVDA, THEN wire Tab/Enter editing.
 - [ ] 3.3 **Heading levels.** infra: `kHeading` + `IntAttribute::kHierarchicalLevel` (1-6). probe: UIA
       heading level (AriaProperties/`LevelId`). NVDA: "heading level N". visual: larger/bolder headings.
 - [ ] 3.4 **Fonts & font weights.** infra: `StringAttribute::kFontFamily` + `FloatAttribute::kFontWeight`
