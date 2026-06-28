@@ -92,7 +92,7 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
         collapses runs as a stopgap.)
 
 ## Phase 4 — Tables
-- [ ] 4.1 **Text in a table cell.** infra: `kTable` → `kRow` → `kCell`(text), row/col span + indices.
+- [x] 4.1 **Text in a table cell** — DONE PROVEN (UIA Grid + named cells + visual).  -- infra: `kTable` → `kRow` → `kCell`(text), row/col span + indices.
       probe: UIA Grid/Table/GridItem patterns + cell text + RowCount/ColumnCount. NVDA: "table", row/col,
       cell content on navigation. visual: paint grid + cell text.
 - [ ] 4.2 **Cell selection via ISelectionProvider2.** infra: selection on cells; `ISelectionProvider2`

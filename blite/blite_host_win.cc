@@ -618,6 +618,8 @@ class Bridge {
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnIndex, c);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowSpan, 1);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnSpan, 1);
+          cell.SetName(tbl[r][c]);  // cell name = its text (name-from-contents),
+                                    // so the cell self-describes on table nav
           EmitRawText(tbl[r][c], CharStyle{}, &cell.child_ids);
           nodes[cell_id] = cell;
           row.child_ids.push_back(cell_id);
