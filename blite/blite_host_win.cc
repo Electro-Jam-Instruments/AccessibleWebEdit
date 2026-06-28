@@ -1050,34 +1050,40 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         const MockCanvasEditor& ed = *g_host->editor();
         const Layout lay = LayOut(ed);
         const Metrics m;
-        // Force the fixed-pitch font's cell to exactly the layout advance so the
-        // whole-string draw lands each glyph at origin_x + i*advance -- matching
-        // the layout (and the UIA geometry) without the per-glyph gaps that
-        // looked uneven before.
-        HFONT font = CreateFontW(
-            /*height=*/m.cell_h, /*width=*/m.advance, 0, 0,
-            ed.bold() ? FW_BOLD : FW_NORMAL, /*italic=*/ed.italic() ? TRUE : FALSE,
-            /*underline=*/ed.underline() ? TRUE : FALSE, /*strikeout=*/FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
-        HFONT old_font = static_cast<HFONT>(SelectObject(hdc, font));
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, RGB(0, 0, 0));
-        // One TextOut PER LINE (split on '\n') -> continuous underline + natural
-        // italic per line, each at its layout y. Matches the multi-line LayOut.
+        HFONT old_font = static_cast<HFONT>(GetCurrentObject(hdc, OBJ_FONT));
+        // One font PER STYLE RUN (bold/italic/underline) -> mixed-format renders.
+        // Within a run, draw line-segments (split on '\n') at the layout glyph
+        // positions, so per-run fonts AND multi-line both work and match the a11y.
+        // The font's cell is forced to the layout advance so painted == layout.
         const std::string& t = ed.text();
-        int line = 0;
-        size_t start = 0;
-        for (size_t i = 0; i <= t.size(); ++i) {
-          if (i == t.size() || t[i] == '\n') {
-            std::string ls = t.substr(start, i - start);
-            std::wstring w(ls.begin(), ls.end());
-            if (!w.empty())
-              TextOutW(hdc, m.origin_x, m.origin_y + line * m.line_h, w.c_str(),
+        for (const StyleRun& r : ed.runs()) {
+          HFONT font = CreateFontW(
+              m.cell_h, m.advance, 0, 0,
+              r.style.bold ? FW_BOLD : FW_NORMAL, r.style.italic ? TRUE : FALSE,
+              r.style.underline ? TRUE : FALSE, FALSE, DEFAULT_CHARSET,
+              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+              FIXED_PITCH | FF_MODERN, L"Consolas");
+          SelectObject(hdc, font);
+          int i = 0;
+          while (i < r.length) {
+            const int seg_g = r.start + i;
+            std::string seg;
+            while (i < r.length && t[r.start + i] != '\n') {
+              seg += t[r.start + i];
+              ++i;
+            }
+            if (!seg.empty() && seg_g < static_cast<int>(lay.glyphs.size())) {
+              std::wstring w(seg.begin(), seg.end());
+              TextOutW(hdc, lay.glyphs[seg_g].x, lay.glyphs[seg_g].y, w.c_str(),
                        static_cast<int>(w.size()));
-            ++line;
-            start = i + 1;
+            }
+            if (i < r.length && t[r.start + i] == '\n')
+              ++i;  // skip the newline
           }
+          SelectObject(hdc, old_font);
+          DeleteObject(font);
         }
         // Caret: a filled vertical bar at the layout caret rect.
         RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
@@ -1085,8 +1091,6 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         HBRUSH caret_brush = CreateSolidBrush(RGB(0, 0, 0));
         FillRect(hdc, &cr, caret_brush);
         DeleteObject(caret_brush);
-        SelectObject(hdc, old_font);
-        DeleteObject(font);
       }
       EndPaint(hwnd, &ps);
       return 0;
