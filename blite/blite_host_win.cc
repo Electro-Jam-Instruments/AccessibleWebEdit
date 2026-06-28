@@ -164,6 +164,7 @@ class MockCanvasEditor {
   MockCanvasEditor() {
     text_ = "Groceries\nApples\nBananas\nCherries";
     caret_ = 0;  // caret on the HEADING line so NVDA announces "heading level 1"
+    anchor_off_ = caret_;  // collapsed selection at startup
     const CharStyle plain_style{false, false, false, ""};
     styles_.assign(text_.size(), plain_style);
     typing_style_ = plain_style;
@@ -244,10 +245,35 @@ class MockCanvasEditor {
   }
   int caret() const { return caret_; }
 
+  // --- selection (body, phase E2) -------------------------------------------
+  // A body selection is [anchor_off_, caret_]; collapsed when equal. Shift+move
+  // keeps the anchor (the WndProc decides); a plain move calls Collapse().
+  int anchor() const { return anchor_off_; }
+  bool has_text_sel() const { return !in_table_ && anchor_off_ != caret_; }
+  int sel_lo() const { return std::min(anchor_off_, caret_); }
+  int sel_hi() const { return std::max(anchor_off_, caret_); }
+  void Collapse() { anchor_off_ = caret_; }  // drop the selection (anchor=caret)
+  void CollapseToStart() { caret_ = sel_lo(); anchor_off_ = caret_; }
+  void CollapseToEnd() { caret_ = sel_hi(); anchor_off_ = caret_; }
+  bool DeleteSelectionIfAny() {
+    if (!has_text_sel())
+      return false;
+    const int lo = sel_lo(), hi = sel_hi();
+    text_.erase(lo, hi - lo);
+    styles_.erase(styles_.begin() + lo, styles_.begin() + hi);
+    caret_ = lo;
+    anchor_off_ = lo;
+    return true;
+  }
+
   void InsertText(const std::string& s) {
+    if (in_table_)
+      return;  // cell text editing is phase E5
+    DeleteSelectionIfAny();  // typing replaces a selection
     text_.insert(caret_, s);
     styles_.insert(styles_.begin() + caret_, s.size(), typing_style_);
     caret_ += static_cast<int>(s.size());
+    anchor_off_ = caret_;
   }
 
   // Replace the whole buffer -- used when a UIA client writes via
@@ -262,18 +288,28 @@ class MockCanvasEditor {
   // if the TEXT changed (vs. a pure caret move), so the host fires the right
   // UIA events. Per-char styles stay in lockstep with the text.
   bool Backspace() {
+    if (in_table_)
+      return false;  // cell editing is phase E5
+    if (DeleteSelectionIfAny())
+      return true;  // delete the selection, not a char
     if (caret_ <= 0)
       return false;
     text_.erase(caret_ - 1, 1);
     styles_.erase(styles_.begin() + (caret_ - 1));
     --caret_;
+    anchor_off_ = caret_;
     return true;
   }
   bool DeleteForward() {
+    if (in_table_)
+      return false;  // cell editing is phase E5
+    if (DeleteSelectionIfAny())
+      return true;
     if (caret_ >= static_cast<int>(text_.size()))
       return false;
     text_.erase(caret_, 1);
     styles_.erase(styles_.begin() + caret_);
+    anchor_off_ = caret_;
     return true;
   }
   void MoveCaret(int delta) {
@@ -437,6 +473,7 @@ class MockCanvasEditor {
   std::vector<CharStyle> styles_ =
       std::vector<CharStyle>(5, CharStyle{true, true, true});
   int caret_ = 5;
+  int anchor_off_ = 5;  // body selection anchor; == caret_ when collapsed (E2)
   CharStyle typing_style_ = CharStyle{true, true, true};
   // Per-line block type (parallel to the lines of text_). Empty => all paragraph.
   std::vector<BlockType> line_blocks_;
@@ -799,26 +836,34 @@ class Bridge {
     // (so NVDA announces "<cell>, selected" on entry/nav) with a degenerate caret
     // in the cell's text. Otherwise the field is focused and the caret maps to the
     // owning body line's inline box at its local offset.
-    int sel_node = kField, sel_local = 0;
     if (editor.in_table() && caret_cell_id) {
       update.tree_data.focus_id = caret_cell_id;
-      sel_node = caret_cell_inline ? caret_cell_inline : caret_cell_id;
-      sel_local = editor.cell_off();  // real text caret inside the cell
+      const int n = caret_cell_inline ? caret_cell_inline : caret_cell_id;
+      update.tree_data.sel_anchor_object_id = n;
+      update.tree_data.sel_anchor_offset = editor.cell_off();
+      update.tree_data.sel_focus_object_id = n;
+      update.tree_data.sel_focus_offset = editor.cell_off();
     } else {
-      const int caret = editor.caret();
-      for (int li = 0; li < static_cast<int>(lines.size()); ++li) {
-        if (caret >= lines[li].start &&
-            caret <= lines[li].start + lines[li].len) {
-          sel_node = line_inline[li] ? line_inline[li] : kField;
-          sel_local = caret - lines[li].start;
-          break;
-        }
-      }
+      // Body: map BOTH anchor and focus to (inline box, local offset) so a
+      // Shift-selection is a real range (E2), not degenerate.
+      auto map_body = [&](int off, int* node, int* local) {
+        *node = kField;
+        *local = 0;
+        for (int li = 0; li < static_cast<int>(lines.size()); ++li)
+          if (off >= lines[li].start && off <= lines[li].start + lines[li].len) {
+            *node = line_inline[li] ? line_inline[li] : kField;
+            *local = off - lines[li].start;
+            return;
+          }
+      };
+      int an = kField, al = 0, fn = kField, fl = 0;
+      map_body(editor.anchor(), &an, &al);
+      map_body(editor.caret(), &fn, &fl);
+      update.tree_data.sel_anchor_object_id = an;
+      update.tree_data.sel_anchor_offset = al;
+      update.tree_data.sel_focus_object_id = fn;
+      update.tree_data.sel_focus_offset = fl;
     }
-    update.tree_data.sel_anchor_object_id = sel_node;
-    update.tree_data.sel_anchor_offset = sel_local;
-    update.tree_data.sel_focus_object_id = sel_node;
-    update.tree_data.sel_focus_offset = sel_local;
 
     // Emit pre-order so parents precede children in update.nodes.
     std::function<void(int)> emit = [&](int id) {
@@ -1483,6 +1528,18 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, RGB(0, 0, 0));
         HFONT old_font = static_cast<HFONT>(GetCurrentObject(hdc, OBJ_FONT));
+        // BODY selection highlight (E2): fill each selected glyph cell BEFORE the
+        // text so the text draws on top. Same per-glyph rects as the a11y range.
+        if (ed.has_text_sel()) {
+          HBRUSH selb = CreateSolidBrush(RGB(173, 214, 255));  // light blue
+          for (int i = ed.sel_lo();
+               i < ed.sel_hi() && i < static_cast<int>(lay.glyphs.size()); ++i) {
+            const Rect& g = lay.glyphs[i];
+            RECT gr = {g.x, g.y, g.x + m.advance, g.y + m.cell_h};
+            FillRect(hdc, &gr, selb);
+          }
+          DeleteObject(selb);
+        }
         // One font PER STYLE RUN (bold/italic/underline) -> mixed-format renders.
         // Within a run, draw line-segments (split on '\n') at the layout glyph
         // positions, so per-run fonts AND multi-line both work and match the a11y.
@@ -1648,19 +1705,23 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
       // Backspace/Delete change text; arrows/Home/End are pure caret moves.
       if (g_host && g_host->editor()) {
         MockCanvasEditor* ed = g_host->editor();
-        bool handled = true, text_changed = false;
+        const bool shift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        bool handled = true, text_changed = false, is_move = false;
         switch (wparam) {
           case VK_BACK: text_changed = ed->Backspace(); break;
           case VK_DELETE: text_changed = ed->DeleteForward(); break;
           case VK_RETURN: ed->InsertText("\n"); text_changed = true; break;
-          case VK_LEFT: ed->CaretLeft(); break;
-          case VK_RIGHT: ed->CaretRight(); break;
-          case VK_UP: ed->CaretUp(); break;
-          case VK_DOWN: ed->CaretDown(); break;
-          case VK_HOME: ed->CaretHome(); break;
-          case VK_END: ed->CaretEnd(); break;
+          case VK_LEFT: ed->CaretLeft(); is_move = true; break;
+          case VK_RIGHT: ed->CaretRight(); is_move = true; break;
+          case VK_UP: ed->CaretUp(); is_move = true; break;
+          case VK_DOWN: ed->CaretDown(); is_move = true; break;
+          case VK_HOME: ed->CaretHome(); is_move = true; break;
+          case VK_END: ed->CaretEnd(); is_move = true; break;
           default: handled = false; break;
         }
+        // Shift extends the selection (anchor pinned); a plain move collapses it.
+        if (is_move && !shift)
+          ed->Collapse();
         if (handled) {
           g_host->RequestSync(text_changed);     // a11y work -> loop level
           ::InvalidateRect(hwnd, nullptr, TRUE);  // visual now (cheap)

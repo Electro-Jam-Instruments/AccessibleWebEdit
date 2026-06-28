@@ -44,11 +44,11 @@ Drive exactly one per the mode; fire the matching event.
 - [x] probe: degenerate caret in cell (uiaprobe_select BEFORE = 1px caret), 0 cells selected; NVDA: 'table, row, Qty, column header, row 1, column 1' (results/nvda-e1-PROVEN.log); caret bar in cell (results/blite-cell-caret.png). [orig: a caret-position probe (Text pattern GetSelection degenerate range inside the cell; the
       cell is the enclosing element). NVDA: arrowing reads the cell's characters. visual: caret bar
       drawn inside the cell at `cell_off` (not the whole-cell highlight).
-## Phase E2 — Shift-selection in BODY text
-- [ ] Shift+arrows extend focus from a pinned anchor; non-Shift collapses. Backspace/Delete/typing
-      replace a non-empty selection. Home/End line-relative; Ctrl+Left/Right word moves.
-- [ ] Bridge: set AXTreeData sel anchor/focus to the real range. probe: GetSelection non-degenerate +
-      GetText. NVDA: "selected <text>". visual: highlight behind the selected glyph run.
+## Phase E2 — Shift-selection in BODY text — DONE PROVEN
+- [x] Shift+arrows extend focus from a pinned anchor; plain move collapses. Backspace/Delete/typing
+      replace a non-empty selection. (Home/End line-relative + Ctrl word moves -> deferred to E5.)
+- [x] Bridge maps anchor+focus to a real range; probe GetSelection='Groc'; NVDA 'G selected','r selected',
+      'o selected','c selected' (results/nvda-e2-PROVEN.log); highlight on 'Groc' (results/blite-body-select.png).
 ## Phase E3 — Shift-selection INSIDE one cell (text mode, bounded to the cell)
 - [ ] Same as E2 but the focus stays in the cell; selection is the cell's inner text range.
 ## Phase E4 — Promote to CELL-BLOCK on boundary cross
