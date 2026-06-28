@@ -46,7 +46,7 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
         6. Bounds: add host `RunGlobalStart(AXNodeID)` (sum preceding runs' lengths via field children order);
            `NodeScreenBounds`/`InnerTextRangeScreenBounds` map a run node's LOCAL offset -> global = start+local
            -> screen rect (single-line: x=origin_x+global*advance).
-  - [ ] probe: extend `uiaprobe_attrs` -> clone DocumentRange, MoveEndpointByUnit(Character) to cover run1 vs
+  - [x] probe: extend `uiaprobe_attrs` -> clone DocumentRange, MoveEndpointByUnit(Character) to cover run1 vs
         run2, GetAttributeValue per sub-range = per-run; whole range = `UiaGetReservedMixedAttributeValue`
         (VT_UNKNOWN). Also re-run uiaprobe (flat leaf intact) + uiaprobe_select (ExpandToEnclosingUnit no crash).
   - [ ] NVDA: capture — navigate runs, attribute change ("bold"/"not bold") announced; field still read (flat).

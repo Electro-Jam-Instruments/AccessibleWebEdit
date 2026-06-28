@@ -136,6 +136,19 @@ struct StyleRun {
 
 class MockCanvasEditor {
  public:
+  // Initial content is intentionally MIXED-FORMAT (two style runs) to exercise
+  // per-run attributes: "Bold" (bold) + " plain" (no bold). Single line for now.
+  MockCanvasEditor() {
+    text_ = "Bold plain";
+    caret_ = static_cast<int>(text_.size());
+    const CharStyle bold_style{true, false, false};
+    const CharStyle plain_style{false, false, false};
+    styles_.assign(text_.size(), plain_style);
+    for (int i = 0; i < 4 && i < static_cast<int>(styles_.size()); ++i)
+      styles_[i] = bold_style;  // "Bold"
+    typing_style_ = plain_style;
+  }
+
   const std::string& text() const { return text_; }
   int caret() const { return caret_; }
 
@@ -323,18 +336,8 @@ void FillRunAttributes(AXNodeData& node, const MockCanvasEditor& editor) {
   FillRunAttributes(node, editor.style_at(0));
 }
 
-void FillInlineTextBox(AXNodeData& node, const MockCanvasEditor& editor) {
-  const std::string& text = editor.text();
-  node.role = ax::mojom::Role::kInlineTextBox;
-  node.SetName(text);
-  std::vector<int32_t> char_offsets;
-  char_offsets.reserve(text.size());
-  for (size_t i = 0; i < text.size(); ++i)
-    char_offsets.push_back(static_cast<int32_t>((i + 1) * 7));  // 7px/char mock
-  node.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
-                           char_offsets);
-  FillRunAttributes(node, editor);
-}
+// (FillInlineTextBox removed -- the per-run Bridge::BuildTree builds each run's
+// inline text box inline, with that run's char offsets + style.)
 
 // The editable field node. Factored so BuildInitialTree and BuildEditDelta stay
 // identical -- the edit delta rebuilds it fresh so run-attribute CHANGES (e.g.
@@ -368,57 +371,86 @@ void FillFieldNode(AXNodeData& node, const MockCanvasEditor& editor) {
 // root), §2.1/§2.2 (selection in AXTreeData).
 class Bridge {
  public:
-  AXTreeUpdate BuildInitialTree(const MockCanvasEditor& editor) {
+  // Node ids per run i: StaticText = 3+2i, InlineTextBox = 4+2i. Run 0 keeps
+  // kText=3/kInline=4 (back-compat with the single-run helpers + bounds).
+  static int RunStaticTextId(int i) { return 3 + 2 * i; }
+  static int RunInlineId(int i) { return 4 + 2 * i; }
+
+  // Build the WHOLE tree from the editor: one StaticText+InlineTextBox per style
+  // run (each carrying that run's attributes -> per-run UIA attributes, with the
+  // field non-atomic). Used for both the initial tree and every edit delta (full
+  // rebuild -- the run COUNT can change; our manual UIA event firing does not
+  // rely on the AXEventGenerator's per-node diff).
+  AXTreeUpdate BuildTree(const MockCanvasEditor& editor, AXTreeID tree_id) {
     AXTreeUpdate update;
     update.has_tree_data = true;
-    // Caret lives on the inline-text-box LEAF (the addressable text), not the
-    // StaticText container.
-    update.tree_data.sel_anchor_object_id = kInline;
-    update.tree_data.sel_anchor_offset = editor.caret();
-    update.tree_data.sel_focus_object_id = kInline;
-    update.tree_data.sel_focus_offset = editor.caret();
-    // Mark the editable field as the tree's focused node so NVDA treats it as
-    // the real keyboard-focus target (it filters focus on non-focused controls).
     update.tree_data.focus_id = kField;
-    // A valid tree id lets an AXTreeManager register this tree so the platform
-    // layer can resolve nodes for UIA navigation.
-    update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
+    update.tree_data.tree_id = tree_id;
+
+    std::vector<StyleRun> runs = editor.runs();
+    if (runs.empty())
+      runs.push_back(StyleRun{0, 0, editor.style_at(0)});  // empty text -> 1 run
+
+    // Caret -> the run that owns it, at a LOCAL offset on that run's inline box.
+    int sel_node = RunInlineId(0), sel_local = 0;
+    const int caret = editor.caret();
+    for (int i = 0; i < static_cast<int>(runs.size()); ++i) {
+      if (caret >= runs[i].start && caret <= runs[i].start + runs[i].length) {
+        sel_node = RunInlineId(i);
+        sel_local = caret - runs[i].start;
+      }
+    }
+    update.tree_data.sel_anchor_object_id = sel_node;
+    update.tree_data.sel_anchor_offset = sel_local;
+    update.tree_data.sel_focus_object_id = sel_node;
+    update.tree_data.sel_focus_offset = sel_local;
+
     update.root_id = kRoot;
-    update.nodes.resize(4);
-    update.nodes[0].id = kRoot;
-    update.nodes[0].role = ax::mojom::Role::kRootWebArea;
-    update.nodes[0].child_ids = {kField};
-    FillFieldNode(update.nodes[1], editor);
-    update.nodes[2].id = kText;
-    update.nodes[2].role = ax::mojom::Role::kStaticText;
-    update.nodes[2].SetName(editor.text());
-    FillRunAttributes(update.nodes[2], editor);  // attrs on the platform leaf
-    update.nodes[2].child_ids = {kInline};
-    update.nodes[3].id = kInline;
-    FillInlineTextBox(update.nodes[3], editor);
+    AXNodeData root;
+    root.id = kRoot;
+    root.role = ax::mojom::Role::kRootWebArea;
+    root.child_ids = {kField};
+    update.nodes.push_back(root);
+
+    AXNodeData field;
+    FillFieldNode(field, editor);  // id/role/states/value/non-atomic/caret bounds
+    field.child_ids.clear();
+    for (int i = 0; i < static_cast<int>(runs.size()); ++i)
+      field.child_ids.push_back(RunStaticTextId(i));
+    update.nodes.push_back(field);
+
+    for (int i = 0; i < static_cast<int>(runs.size()); ++i) {
+      const StyleRun& r = runs[i];
+      const std::string run_text = editor.text().substr(r.start, r.length);
+      AXNodeData stn;
+      stn.id = RunStaticTextId(i);
+      stn.role = ax::mojom::Role::kStaticText;
+      stn.SetName(run_text);
+      FillRunAttributes(stn, r.style);  // per-run attrs on the platform leaf
+      stn.child_ids = {RunInlineId(i)};
+      update.nodes.push_back(stn);
+
+      AXNodeData inn;
+      inn.id = RunInlineId(i);
+      inn.role = ax::mojom::Role::kInlineTextBox;
+      inn.SetName(run_text);
+      std::vector<int32_t> offs;
+      offs.reserve(run_text.size());
+      for (int k = 0; k < static_cast<int>(run_text.size()); ++k)
+        offs.push_back(static_cast<int32_t>((k + 1) * 7));
+      inn.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
+                              offs);
+      FillRunAttributes(inn, r.style);
+      update.nodes.push_back(inn);
+    }
     return update;
   }
 
-  // A single-node text delta plus the moved caret -- one atomic AXTreeUpdate,
-  // the way the editor would post one keystroke (docs/03 §3.1, §3.2).
+  AXTreeUpdate BuildInitialTree(const MockCanvasEditor& editor) {
+    return BuildTree(editor, AXTreeID::CreateNewAXTreeID());
+  }
   AXTreeUpdate BuildEditDelta(const MockCanvasEditor& editor, AXTree* tree) {
-    AXTreeUpdate update;
-    update.has_tree_data = true;
-    update.tree_data = tree->data();
-    update.tree_data.sel_anchor_offset = editor.caret();
-    update.tree_data.sel_focus_offset = editor.caret();
-    // Rebuild all three nodes fresh (avoids duplicate-attribute issues from
-    // copying existing data, and lets run-attribute CHANGES take effect).
-    update.nodes.resize(3);
-    FillFieldNode(update.nodes[0], editor);  // value + current run attributes
-    update.nodes[1].id = kText;
-    update.nodes[1].role = ax::mojom::Role::kStaticText;
-    update.nodes[1].SetName(editor.text());
-    update.nodes[1].child_ids = {kInline};
-    FillRunAttributes(update.nodes[1], editor);  // attrs on the platform leaf
-    update.nodes[2].id = kInline;
-    FillInlineTextBox(update.nodes[2], editor);
-    return update;
+    return BuildTree(editor, tree->data().tree_id);
   }
 };
 
@@ -556,10 +588,7 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     // which is how UIA ties the content to THIS window's fragment. TestAXNodeWrapper
     // can't do this (it returns a mock/null HWND, no setter), and that mismatch
     // is exactly why the content never appeared under the window.
-    for (AXNodeID id : {kRoot, kField, kText, kInline}) {
-      AXNode* node = tree_->GetFromId(id);
-      delegates_[id] = std::make_unique<BliteNodeDelegate>(this, node);
-    }
+    MaterializeDelegates();  // a delegate per tree node (dynamic: per-run nodes)
     // Create the fragment root bound to the HWND. This is what makes
     // WM_GETOBJECT resolve a UIA provider: AXFragmentRootWin installs the
     // bridge so the UIA root object id resolves to our root.
@@ -654,6 +683,7 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
                 << "\n";
       return false;
     }
+    MaterializeDelegates();  // any new run nodes get delegates
     std::cout << "[host] client SetValue applied -> \"" << editor_->text()
               << "\"\n";
     FirePlatformEditEvents(this);
@@ -700,6 +730,7 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     AXTreeUpdate delta = bridge_->BuildEditDelta(*editor_, tree_);
     if (!tree_->Unserialize(delta))
       return;
+    MaterializeDelegates();  // any new run nodes get delegates
     if (AXPlatformNode* field = PlatformNodeFor(kField)) {
       if (text_changed) {
         field->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged);
@@ -726,6 +757,20 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     pending_sync_ = false;
     pending_text_changed_ = false;
     ApplyLocalEdit(text_changed);
+  }
+
+  // Ensure every node currently in the tree has a delegate (+ AXPlatformNodeWin).
+  // Add-only: safe to call after each Unserialize so newly-added run nodes get a
+  // delegate. (Run count is stable for the first mixed-format content, so no node
+  // removal yet; dynamic drop-on-remove is a later refinement -- task 3.1.)
+  void MaterializeDelegates() { MaterializeSubtree(tree_->root()); }
+  void MaterializeSubtree(AXNode* n) {
+    if (!n)
+      return;
+    if (!delegates_.count(n->id()))
+      delegates_[n->id()] = std::make_unique<BliteNodeDelegate>(this, n);
+    for (size_t i = 0; i < n->GetChildCount(); ++i)
+      MaterializeSubtree(n->GetChildAtIndex(i));
   }
 
   BliteNodeDelegate* DelegateFor(AXNodeID id) {
@@ -1305,6 +1350,7 @@ int Run() {
     std::cerr << "Unserialize failed: " << tree_ptr->error() << "\n";
     return 1;
   }
+  host.MaterializeDelegates();  // any new run nodes get delegates
   std::cout << "\nafter InsertText(\"!\"): \"" << editor.text()
             << "\" caret=" << editor.caret() << "\n";
   DumpEvents("keystroke", generator);

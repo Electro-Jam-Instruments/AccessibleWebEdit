@@ -55,11 +55,34 @@ int main(int argc, char** argv) {
   if (FAILED(tp->get_DocumentRange(&doc)) || !doc) { wprintf(L"no DocumentRange\n"); return 6; }
 
   BSTR t = nullptr; doc->GetText(-1, &t);
-  wprintf(L"run text = '%s'\n", (t && *t) ? t : L"<empty>"); if (t) SysFreeString(t);
-  wprintf(L"run attributes:\n");
-  ReadAttr(doc, UIA_FontWeightAttributeId, L"FontWeight (bold=700)");
+  wprintf(L"whole text = '%s'\n", (t && *t) ? t : L"<empty>"); if (t) SysFreeString(t);
+  wprintf(L"WHOLE range attributes (expect Mixed if multi-run):\n");
+  ReadAttr(doc, UIA_FontWeightAttributeId, L"FontWeight");
   ReadAttr(doc, UIA_IsItalicAttributeId, L"IsItalic");
-  ReadAttr(doc, UIA_UnderlineStyleAttributeId, L"UnderlineStyle (Single=1)");
+  ReadAttr(doc, UIA_UnderlineStyleAttributeId, L"UnderlineStyle");
+
+  // Per-RUN check: build a sub-range of the first N characters and one of the
+  // rest, and read each. mixed-format works if they differ.
+  const int firstN = (argc >= 3) ? _atoi64(argv[2]) : 4;  // "Bold" = 4 chars
+  // run1 = [0, firstN): clone doc, pull End back to firstN.
+  IUIAutomationTextRange* r1 = nullptr;
+  if (SUCCEEDED(doc->Clone(&r1)) && r1) {
+    int moved = 0; r1->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, -100, &moved);
+    r1->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, firstN, &moved);
+    BSTR rt = nullptr; r1->GetText(40, &rt);
+    wprintf(L"RUN1 text='%s' attributes:\n", (rt && *rt) ? rt : L"<empty>"); if (rt) SysFreeString(rt);
+    ReadAttr(r1, UIA_FontWeightAttributeId, L"  FontWeight");
+    r1->Release();
+  }
+  // run2 = [firstN, end): clone doc, push Start forward to firstN.
+  IUIAutomationTextRange* r2 = nullptr;
+  if (SUCCEEDED(doc->Clone(&r2)) && r2) {
+    int moved = 0; r2->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, firstN, &moved);
+    BSTR rt = nullptr; r2->GetText(40, &rt);
+    wprintf(L"RUN2 text='%s' attributes:\n", (rt && *rt) ? rt : L"<empty>"); if (rt) SysFreeString(rt);
+    ReadAttr(r2, UIA_FontWeightAttributeId, L"  FontWeight");
+    r2->Release();
+  }
 
   doc->Release(); tp->Release(); edit->Release(); if (walker) walker->Release();
   root->Release(); uia->Release(); CoUninitialize();
