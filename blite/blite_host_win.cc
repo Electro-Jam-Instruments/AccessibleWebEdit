@@ -186,6 +186,11 @@ class MockCanvasEditor {
   // text reachable by a screen reader; caret-in-cell editing comes later.
   const std::vector<std::vector<std::string>>& table() const { return table_; }
 
+  // The pre-selected table cell (row, col) -- Phase 4.2. Drives BOTH the a11y
+  // kSelected state (Bridge) and the highlight (WM_PAINT), so painted selection
+  // == announced selection.
+  std::pair<int, int> selected_cell() const { return {1, 1}; }
+
   const std::string& text() const { return text_; }
 
   // The block type of a given 0-based line (default paragraph past the vector).
@@ -596,7 +601,11 @@ class Bridge {
       const int table_id = NewId();
       AXNodeData table;
       table.id = table_id;
-      table.role = ax::mojom::Role::kTable;
+      // kGrid (not kTable): a Grid IS a selection container (UIA Selection
+      // pattern), so cells can be selected -- Phase 4.2. kMultiselectable allows
+      // selecting more than one cell.
+      table.role = ax::mojom::Role::kGrid;
+      table.AddState(ax::mojom::State::kMultiselectable);
       table.AddIntAttribute(ax::mojom::IntAttribute::kTableRowCount, n_rows);
       table.AddIntAttribute(ax::mojom::IntAttribute::kTableColumnCount, n_cols);
       field.child_ids.push_back(table_id);
@@ -611,15 +620,22 @@ class Bridge {
           const int cell_id = NewId();
           AXNodeData cell;
           cell.id = cell_id;
-          // Row 0 is a header row (column headers); the rest are data cells.
+          // Row 0 = column headers; data rows = kGridCell (always selectable, the
+          // SelectionItem pattern -> Phase 4.2 cell selection).
           cell.role = (r == 0) ? ax::mojom::Role::kColumnHeader
-                               : ax::mojom::Role::kCell;
+                               : ax::mojom::Role::kGridCell;
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowIndex, r);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnIndex, c);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellRowSpan, 1);
           cell.AddIntAttribute(ax::mojom::IntAttribute::kTableCellColumnSpan, 1);
           cell.SetName(tbl[r][c]);  // cell name = its text (name-from-contents),
                                     // so the cell self-describes on table nav
+          // Phase 4.2: pre-select one data cell to exercise the Selection
+          // pattern (GetSelection returns it; ISelectionItemProvider reports
+          // IsSelected; the visual highlights the same cell).
+          if (r == editor.selected_cell().first &&
+              c == editor.selected_cell().second)
+            cell.AddBoolAttribute(ax::mojom::BoolAttribute::kSelected, true);
           EmitRawText(tbl[r][c], CharStyle{}, &cell.child_ids);
           nodes[cell_id] = cell;
           row.child_ids.push_back(cell_id);
@@ -1399,6 +1415,15 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
               SelectObject(hdc, tfont);
               for (int c = 0; c < static_cast<int>(tbl[r].size()); ++c) {
                 const int x = tx + c * col_w, y = ty + r * row_h;
+                // Highlight the SELECTED cell (4.2) -- same cell the a11y marks
+                // kSelected, so painted selection == announced selection.
+                if (r == ed.selected_cell().first &&
+                    c == ed.selected_cell().second) {
+                  RECT hl = {x + 1, y + 1, x + col_w, y + row_h};
+                  HBRUSH sb = CreateSolidBrush(RGB(173, 214, 255));  // light blue
+                  FillRect(hdc, &hl, sb);
+                  DeleteObject(sb);
+                }
                 Rectangle(hdc, x, y, x + col_w, y + row_h);
                 std::wstring w(tbl[r][c].begin(), tbl[r][c].end());
                 TextOutW(hdc, x + 4, y + 2, w.c_str(),

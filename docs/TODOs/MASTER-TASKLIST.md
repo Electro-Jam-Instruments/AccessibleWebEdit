@@ -95,7 +95,10 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
 - [x] 4.1 **Text in a table cell** — DONE PROVEN (UIA Grid + named cells + visual).  -- infra: `kTable` → `kRow` → `kCell`(text), row/col span + indices.
       probe: UIA Grid/Table/GridItem patterns + cell text + RowCount/ColumnCount. NVDA: "table", row/col,
       cell content on navigation. visual: paint grid + cell text.
-- [ ] 4.2 **Cell selection via ISelectionProvider2.** infra: selection on cells; `ISelectionProvider2`
+- [~] 4.2 **Cell selection** — v1 DONE (kGrid/kGridCell/kSelected; cell IsSelected=TRUE + highlight).
+      REMAINING (v2): ISelectionProvider2 + container GetSelection-of-grid-cells need a Chromium
+      AXPlatformNodeWin patch (stock has only ISelectionProvider v1, and GetSelectedItems skips non-item-like
+      kGridCell). --orig: infra: selection on cells; `ISelectionProvider2`
       (FirstSelectedItem/LastSelectedItem/CurrentSelectedItem) — `patches/` has a sketch. probe: GetSelection
       + SelectionProvider2 members. NVDA: selected cells announced. visual: highlight selected cells.
 
