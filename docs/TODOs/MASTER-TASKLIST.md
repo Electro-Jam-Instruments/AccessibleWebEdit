@@ -77,7 +77,7 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
       NOTE: lists are NAVIGABLE structure, a departure from the flat-leaf field. Watch the HidesChildrenFromUIA
       interaction + NVDA browse/focus mode. Start with a fixed demo doc (1 paragraph + a 3-item bullet list),
       prove it via probe+NVDA, THEN wire Tab/Enter editing.
-- [ ] 3.3 **Heading levels.** infra: `kHeading` + `IntAttribute::kHierarchicalLevel` (1-6). probe: UIA
+- [x] 3.3 **Heading levels** — DONE PROVEN (infra+probe+NVDA+visual).  -- infra: `kHeading` + `IntAttribute::kHierarchicalLevel` (1-6). probe: UIA
       heading level (AriaProperties/`LevelId`). NVDA: "heading level N". visual: larger/bolder headings.
 - [ ] 3.4 **Fonts & font weights.** infra: `StringAttribute::kFontFamily` + `FloatAttribute::kFontWeight`
       per run. probe: `UIA_FontNameAttributeId` + `UIA_FontWeightAttributeId` per run. NVDA: font/weight

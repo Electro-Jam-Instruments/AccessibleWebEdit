@@ -159,7 +159,7 @@ class MockCanvasEditor {
   // end-to-end. (Mixed-format runs proven separately, commit 0798d8d.)
   MockCanvasEditor() {
     text_ = "Groceries\nApples\nBananas\nCherries";
-    caret_ = static_cast<int>(text_.size());
+    caret_ = 0;  // caret on the HEADING line so NVDA announces "heading level 1"
     const CharStyle plain_style{false, false, false};
     styles_.assign(text_.size(), plain_style);
     typing_style_ = plain_style;
