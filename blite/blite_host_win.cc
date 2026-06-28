@@ -646,6 +646,11 @@ class BliteNodeDelegate : public AXPlatformNodeDelegate {
   // The tree's text selection -- the source GetSelection turns into the degenerate
   // caret range (the insertion point a screen reader tracks).
   const AXSelection GetUnignoredSelection() const override;
+  // Surface the AXNode's COMPUTED pos-in-set / set-size (from the kList/kListItem
+  // structure) to the platform layer. Base returns nullopt -> UIA
+  // PositionInSet/SizeOfSet came back 0 even though the AXNode computes 1/2/3.
+  std::optional<int> GetPosInSet() const override { return node()->GetPosInSet(); }
+  std::optional<int> GetSetSize() const override { return node()->GetSetSize(); }
   // The node's on-screen bounds, taken from the SAME layout the window paints
   // (base returns an empty rect) -- so a UIA client reads element/caret bounds at
   // the painted location. This is the pixels<->a11y geometry coupling.
