@@ -201,10 +201,19 @@ class MockCanvasEditor {
   // BOTH in the table and in DIFFERENT cells (cross-cell ⇒ cells, doc 18 / E4).
   // Else {-1,-1,-1,-1} (a same-cell selection is TEXT, not a block).
   std::tuple<int, int, int, int> selected_block() const {
-    if (in_table_ && anchor_in_table_ &&
-        !(anchor_tr_ == tr_ && anchor_tc_ == tc_))
+    if (in_table_ && anchor_in_table_) {
+      if (anchor_tr_ == tr_ && anchor_tc_ == tc_)
+        return {-1, -1, -1, -1};  // same cell -> TEXT selection, not a block
       return {std::min(anchor_tr_, tr_), std::min(anchor_tc_, tc_),
               std::max(anchor_tr_, tr_), std::max(anchor_tc_, tc_)};
+    }
+    // E7 (D3): exactly ONE endpoint in the table (a body<->table Shift) -> snap to
+    // WHOLE cells, never a half-selected cell from outside. Select whole rows from
+    // the table top down to the in-table endpoint's row.
+    if (in_table_ != anchor_in_table_) {
+      const int trow = in_table_ ? tr_ : anchor_tr_;
+      return {0, 0, trow, std::max(0, table_cols() - 1)};
+    }
     return {-1, -1, -1, -1};
   }
   // A TEXT selection WITHIN one cell (same cell, different offsets) -- E3.

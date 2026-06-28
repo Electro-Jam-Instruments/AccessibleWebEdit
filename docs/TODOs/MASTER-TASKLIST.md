@@ -65,13 +65,14 @@ Drive exactly one per the mode; fire the matching event.
 - [x] Tab -> next cell + select whole text (uiaprobe_select GetText='Item'); Tab in the last cell ->
       append a row (RowCount 3->4, results/blite-new-row.png); Shift+Tab -> previous cell; Ctrl+Tab ->
       literal tab. No crash.
-## Phase E7 — Body↔table Shift (D3: snap to whole cells)
-- [ ] Shift-extend from body INTO the table ⇒ select whole cells (snap the rectangle), never a
-      half-selected cell from outside.
+## Phase E7 — Body<->table Shift (D3: snap to whole cells) — DONE PROVEN
+- [x] Shift from body INTO the table snaps to whole cells (rows 0..focus-row): Shift+Down -> 2 cells
+      (row0), then 4 cells (rows 0-1); GetCurrentSelection enumerates them; block highlight
+      (results/blite-body-to-table.png). No crash.
 
-## Completion gate (editing)
-- [ ] When E1–E7 are PROVEN (probe + NVDA + visual), recreate `results/PROTOTYPE-COMPLETE`
-      with the editing-evidence index. That ends the loop. (Re-arm by deleting it + `scripts/.loop-count`.)
+## Completion gate (editing) — DONE
+- [x] E1-E7 all PROVEN (probe + NVDA + visual). results/PROTOTYPE-COMPLETE recreated with the editing
+      evidence index. (Re-arm by deleting it + scripts/.loop-count.)
 
 ---
 

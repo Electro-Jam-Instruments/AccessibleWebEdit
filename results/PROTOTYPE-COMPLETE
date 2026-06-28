@@ -1,0 +1,45 @@
+AccessibleWebEdit — PROTOTYPE COMPLETE (editing model)
+======================================================
+
+Milestone 1 (results/MILESTONE-1-prototype-complete.md): rich text + tables + cell
+selection + visuals, all driving NVDA. Milestone 2 (this file): a real Word/Docs-style
+EDITING model -- caret + selection in body text AND tables -- per
+docs/research/18-caret-selection-and-table-editing-model.md (decisions D1-D5).
+
+This sentinel ends the autonomous work loop (scripts/stop-loop-hook.sh).
+
+== Editing phases (all PROVEN: producer infra -> UIA probe -> NVDA -> coupled visual) ==
+
+E1  Text caret INSIDE a cell ....... PROVEN  caret = degenerate text pos at cell_off; NVDA "table, Qty,
+                                              column header, row 1, column 1"; caret bar in cell.
+                                              results/nvda-e1-PROVEN.log, results/blite-cell-caret.png
+E2  Shift-selection in BODY text ... PROVEN  anchor/focus range; uiaprobe_select='Groc'; NVDA
+                                              "G selected, r selected, o selected, c selected".
+                                              results/nvda-e2-PROVEN.log, results/blite-body-select.png
+E3  Shift-selection INSIDE a cell .. PROVEN  same-cell text range; uiaprobe_select='Qt'.
+                                              results/blite-cell-text-sel.png
+E4  Promote to CELL-BLOCK ........... PROVEN  cross-cell -> kSelected rectangle; GetCurrentSelection=2 cells;
+                                              NVDA "Qty, column header, selected, row 1, column 1".
+                                              results/nvda-e34-PROVEN.log, results/blite-cell-block.png
+E5  Delete/Backspace semantics ..... PROVEN  cell edit; no-op at cell edges (no merge); block Delete clears
+                                              contents. results/blite-cell-edit.png, results/blite-cell-cleared.png
+E6  Tab (Word model, D5) ........... PROVEN  Tab -> next cell + select ('Item'); last cell -> new row
+                                              (RowCount 3->4). results/blite-new-row.png
+E7  Body<->table Shift (D3) ........ PROVEN  snap to whole cells; Shift+Down -> 2 then 4 cells.
+                                              results/blite-body-to-table.png
+
+== The rule that makes tables feel like a real editor (doc 18) ==
+A Shift-selection is a TEXT selection while the moving end stays in ONE cell, and
+PROMOTES to a CELL-BLOCK selection the instant it crosses into another cell -- driving
+exactly one of the two INDEPENDENT a11y mechanisms (ITextRangeProvider text range vs
+per-cell kSelected / ISelectionProvider2) and firing the matching event.
+
+== Deferred refinements (not feature gaps) ==
+- Ctrl+Left/Right word moves; line-relative Home/End in body.
+- Body-text portion of a body<->table selection is shown as whole-cell (v1, D3);
+  full partial cross-in is a later refinement.
+- 5.2 keystroke-driven NVDA NAVIGATION capture for plain-arrow table nav (NVDA browse
+  mode intercepts plain arrows; the hybrid PostMessage-nav + keybd_event-Shift capture
+  works and was used to prove E1/E4).
+
+To re-arm the loop for further work, delete this file and scripts/.loop-count.
