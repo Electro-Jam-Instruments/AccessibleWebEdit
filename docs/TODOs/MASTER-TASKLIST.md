@@ -56,10 +56,11 @@ Drive exactly one per the mode; fire the matching event.
 - [x] Cross-cell Shift flips to cell mode: kSelected on the anchor↔focus rectangle, text range collapsed,
       focus-cell kFocus. probe: GetCurrentSelection = 2 cells (Qty + '2'); NVDA 'Qty, column header,
       selected, row 1, column 1' (results/nvda-e34-PROVEN.log); block highlight (results/blite-cell-block.png).
-## Phase E5 — Delete/Backspace + word moves (D4)
-- [ ] Caret in cell: Backspace at cell start / Delete at cell end = NO-OP (no cross-cell merge).
-      Text selection ⇒ delete text. Cell block ⇒ clear the selected cells' contents (keep rows/cols),
-      caret to the anchor cell. Ctrl+Backspace/Delete = word.
+## Phase E5 — Delete/Backspace (D4) — DONE PROVEN (word moves deferred)
+- [x] Cell text editing (type/Backspace/Delete in a cell); Backspace at cell start + Delete at cell end =
+      NO-OP (no merge); in-cell text-sel + cell-BLOCK Delete/type clears contents, caret to anchor cell.
+      Verified: 'QtyZ' typed (results/blite-cell-edit.png); Shift+Down block + Delete clears Qty+'2'
+      (results/blite-cell-cleared.png); rows/cols intact; no crash. Ctrl+word moves -> deferred follow-up.
 ## Phase E6 — Tab / Shift+Tab / Ctrl+Tab (Word model, D5)
 - [ ] Tab ⇒ next cell + select its whole text; Shift+Tab ⇒ previous cell + select; Tab in the last
       cell ⇒ append a row, caret to its first cell; Ctrl+Tab ⇒ literal tab char in the cell.

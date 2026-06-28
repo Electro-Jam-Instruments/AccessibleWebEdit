@@ -40,9 +40,12 @@ int main(int argc, char** argv) {
   uia->get_RawViewWalker(&g_walker);
   if (!g_walker) { wprintf(L"no walker\n"); return 4; }
 
-  IUIAutomationElement* table = FindByType(root, UIA_TableControlTypeId);
+  // The table is a kGrid -> DataGrid control type (50028); fall back to Table.
+  IUIAutomationElement* table = FindByType(root, UIA_DataGridControlTypeId);
+  if (!table)
+    table = FindByType(root, UIA_TableControlTypeId);
   if (!table) {
-    wprintf(L"NO Table (50036) found\n");
+    wprintf(L"NO Grid/Table found\n");
     return 5;
   }
   wprintf(L"Found Table (50036).\n");

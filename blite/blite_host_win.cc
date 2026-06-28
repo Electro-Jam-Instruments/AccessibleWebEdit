@@ -288,9 +288,49 @@ class MockCanvasEditor {
     return true;
   }
 
+  // --- in-cell editing + cell-block clear (phase E5) ------------------------
+  // Mutable ref to the caret cell's text (bounds-checked; falls back to a dummy).
+  std::string& cell_ref() {
+    static std::string dummy;
+    if (tr_ >= 0 && tr_ < static_cast<int>(table_.size()) && tc_ >= 0 &&
+        tc_ < static_cast<int>(table_[tr_].size()))
+      return table_[tr_][tc_];
+    return dummy;
+  }
+  bool DeleteCellSelIfAny() {  // in-cell TEXT selection -> delete the chars
+    if (!has_cell_text_sel())
+      return false;
+    const int lo = cell_sel_lo(), hi = cell_sel_hi();
+    cell_ref().erase(lo, hi - lo);
+    cell_off_ = lo;
+    Collapse();
+    return true;
+  }
+  bool ClearBlockIfAny() {  // cell-BLOCK selection -> clear the cells' contents
+    auto [r0, c0, r1, c1] = selected_block();
+    if (r0 < 0)
+      return false;
+    for (int r = r0; r <= r1; ++r)
+      for (int c = c0; c <= c1; ++c)
+        if (r < static_cast<int>(table_.size()) &&
+            c < static_cast<int>(table_[r].size()))
+          table_[r][c].clear();
+    tr_ = anchor_tr_;  // caret to the anchor (block origin) cell, collapsed
+    tc_ = anchor_tc_;
+    cell_off_ = 0;
+    Collapse();
+    return true;
+  }
+
   void InsertText(const std::string& s) {
-    if (in_table_)
-      return;  // cell text editing is phase E5
+    if (in_table_) {
+      ClearBlockIfAny();      // typing replaces a cell-block selection (D4)...
+      DeleteCellSelIfAny();   // ...or an in-cell text selection
+      cell_ref().insert(cell_off_, s);
+      cell_off_ += static_cast<int>(s.size());
+      Collapse();
+      return;
+    }
     DeleteSelectionIfAny();  // typing replaces a selection
     text_.insert(caret_, s);
     styles_.insert(styles_.begin() + caret_, s.size(), typing_style_);
@@ -310,8 +350,16 @@ class MockCanvasEditor {
   // if the TEXT changed (vs. a pure caret move), so the host fires the right
   // UIA events. Per-char styles stay in lockstep with the text.
   bool Backspace() {
-    if (in_table_)
-      return false;  // cell editing is phase E5
+    if (in_table_) {
+      if (ClearBlockIfAny() || DeleteCellSelIfAny())
+        return true;
+      if (cell_off_ <= 0)
+        return false;  // NO-OP at cell start: never merge across cell boundaries
+      cell_ref().erase(cell_off_ - 1, 1);
+      --cell_off_;
+      Collapse();
+      return true;
+    }
     if (DeleteSelectionIfAny())
       return true;  // delete the selection, not a char
     if (caret_ <= 0)
@@ -323,8 +371,15 @@ class MockCanvasEditor {
     return true;
   }
   bool DeleteForward() {
-    if (in_table_)
-      return false;  // cell editing is phase E5
+    if (in_table_) {
+      if (ClearBlockIfAny() || DeleteCellSelIfAny())
+        return true;
+      if (cell_off_ >= cur_cell_len())
+        return false;  // NO-OP at cell end: never merge across cell boundaries
+      cell_ref().erase(cell_off_, 1);
+      Collapse();
+      return true;
+    }
     if (DeleteSelectionIfAny())
       return true;
     if (caret_ >= static_cast<int>(text_.size()))
