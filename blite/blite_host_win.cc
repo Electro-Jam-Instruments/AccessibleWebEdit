@@ -325,6 +325,18 @@ inline void LineColOf(const std::string& t, int offset, int* line, int* col) {
   *col = cl;
 }
 
+// A list-item line is indented by this many glyph cells, reserving space for the
+// marker ("•"/"N.") drawn to its left. The indent lives in the ONE layout pass so
+// painted text, caret, and a11y glyph bounds all shift together (stay coupled).
+constexpr int kListIndentCells = 2;
+
+inline int LayoutLineIndentPx(const MockCanvasEditor& ed, int line, const Metrics& m) {
+  const BlockType bt = ed.block_of_line(line);
+  return (bt == BlockType::kBullet || bt == BlockType::kNumber)
+             ? kListIndentCells * m.advance
+             : 0;
+}
+
 inline Layout LayOut(const MockCanvasEditor& ed, const Metrics& m = Metrics{}) {
   Layout out;
   const std::string& t = ed.text();
@@ -333,16 +345,18 @@ inline Layout LayOut(const MockCanvasEditor& ed, const Metrics& m = Metrics{}) {
   for (size_t i = 0; i < t.size(); ++i) {
     // Each char (including '\n') gets a rect at its current line/col so per-char
     // bounds stay addressable; the newline's rect sits at end-of-line.
-    out.glyphs.push_back(Rect{m.origin_x + col * m.advance,
+    out.glyphs.push_back(Rect{m.origin_x + LayoutLineIndentPx(ed, line, m) +
+                                  col * m.advance,
                               m.origin_y + line * m.line_h, m.cell_w, m.cell_h});
     if (t[i] == '\n') { ++line; col = 0; }
     else { ++col; if (col > max_col) max_col = col; }
   }
   int cl = 0, cc = 0;
   LineColOf(t, ed.caret(), &cl, &cc);
-  out.caret = Rect{m.origin_x + cc * m.advance - 1,
+  out.caret = Rect{m.origin_x + LayoutLineIndentPx(ed, cl, m) + cc * m.advance - 1,
                    m.origin_y + cl * m.line_h - 2, 2, m.cell_h + 4};
-  out.width = m.origin_x + max_col * m.advance + m.origin_x;
+  out.width =
+      m.origin_x + (max_col + kListIndentCells) * m.advance + m.origin_x;
   out.height = m.origin_y + (line + 1) * m.line_h + m.origin_y;
   return out;
 }
@@ -1222,6 +1236,30 @@ LRESULT CALLBACK BliteWndProc(HWND hwnd, UINT msg, WPARAM wparam,
           }
           SelectObject(hdc, old_font);
           DeleteObject(font);
+        }
+        // List MARKERS: draw "•" / "N." in the indent reserved by LayOut, just
+        // left of each list-item line's (indented) text. Same single layout pass.
+        {
+          HFONT mfont = CreateFontW(
+              m.cell_h, m.advance, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+              CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+          SelectObject(hdc, mfont);
+          for (const BlockGroup& g : ed.block_groups()) {
+            if (!g.is_list())
+              continue;
+            for (int k = 0; k < g.line_count; ++k) {
+              const int ln = g.first_line + k;
+              const std::wstring mk =
+                  (g.type == BlockType::kNumber)
+                      ? (std::to_wstring(k + 1) + L".")
+                      : std::wstring(1, static_cast<wchar_t>(0x2022));  // bullet
+              TextOutW(hdc, m.origin_x, m.origin_y + ln * m.line_h, mk.c_str(),
+                       static_cast<int>(mk.size()));
+            }
+          }
+          SelectObject(hdc, old_font);
+          DeleteObject(mfont);
         }
         // Caret: a filled vertical bar at the layout caret rect.
         RECT cr = {lay.caret.x, lay.caret.y, lay.caret.x + lay.caret.w,
