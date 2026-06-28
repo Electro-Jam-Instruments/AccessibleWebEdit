@@ -25,7 +25,7 @@ native UIA probe `scripts/uiaprobe*.cpp` → (c) verify with NVDA No-speech capt
 single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pattern.
 
 ## Phase 3 — Rich text
-- [~] 3.1 **Mixed-format runs** — DONE (probe+visual+NVDA); robustness sub-item open.
+- [x] 3.1 **Mixed-format runs** — DONE PROVEN (infra+probe+visual+NVDA+robustness).
   - [x] editor per-char `CharStyle` + `runs()` accessor (maximal same-style spans); backward-compatible.
   - [x] field `kNonAtomicTextFieldRoot` → attribute resolution moves field→StaticText (verified, no regress).
   - [ ] **per-run Bridge (NEXT — precise design):**
@@ -62,7 +62,9 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
       per run. probe: `UIA_FontNameAttributeId` + `UIA_FontWeightAttributeId` per run. NVDA: font/weight
       reported. visual: paint different families/weights.
 
-  - [ ] 3.1-ROBUST **delegate lifetime for dynamic run count** (do BEFORE relying on typing): a run
+  - [x] 3.1-ROBUST **delegate lifetime for dynamic run count** -- DONE: MaterializeDelegates is a full
+        reconcile (drops removed-node delegates after Unserialize, before event firing). Verified NO crash with
+        run removal 2->1 + NVDA reads (results/nvda-mixed.log). [original note:] (do BEFORE relying on typing): a run
         REMOVED on edit frees its AXNode, but MaterializeDelegates is add-only -> stale delegate dangles ->
         NVDA reentrant get_accChild -> DCHECK !GetTreeUpdateInProgressState crash. FIX: BliteAXHost observes
         the tree (AXTreeObserver), drop delegates_[node->id()] in OnNodeWillBeDeleted. (Scripted edit no longer

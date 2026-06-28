@@ -63,6 +63,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -759,18 +760,30 @@ class BliteAXHost : public AXFragmentRootDelegateWin {
     ApplyLocalEdit(text_changed);
   }
 
-  // Ensure every node currently in the tree has a delegate (+ AXPlatformNodeWin).
-  // Add-only: safe to call after each Unserialize so newly-added run nodes get a
-  // delegate. (Run count is stable for the first mixed-format content, so no node
-  // removal yet; dynamic drop-on-remove is a later refinement -- task 3.1.)
-  void MaterializeDelegates() { MaterializeSubtree(tree_->root()); }
-  void MaterializeSubtree(AXNode* n) {
+  // Reconcile delegates with the tree: add a delegate (+AXPlatformNodeWin) for
+  // every current node, and DROP delegates whose node was removed (e.g. a run
+  // deleted when formatting merges runs). Called after each Unserialize -- i.e.
+  // AFTER the tree update finishes (no GetTreeUpdateInProgressState) and BEFORE
+  // any UIA event is fired -- so NVDA's reentrant get_accChild can never walk a
+  // dangling delegate (the crash 3.1-ROBUST fixes).
+  void MaterializeDelegates() {
+    std::set<AXNodeID> live;
+    MaterializeSubtree(tree_->root(), &live);
+    for (auto it = delegates_.begin(); it != delegates_.end();) {
+      if (live.count(it->first))
+        ++it;
+      else
+        it = delegates_.erase(it);  // node gone -> destroy its platform node
+    }
+  }
+  void MaterializeSubtree(AXNode* n, std::set<AXNodeID>* live) {
     if (!n)
       return;
+    live->insert(n->id());
     if (!delegates_.count(n->id()))
       delegates_[n->id()] = std::make_unique<BliteNodeDelegate>(this, n);
     for (size_t i = 0; i < n->GetChildCount(); ++i)
-      MaterializeSubtree(n->GetChildAtIndex(i));
+      MaterializeSubtree(n->GetChildAtIndex(i), live);
   }
 
   BliteNodeDelegate* DelegateFor(AXNodeID id) {
@@ -1346,13 +1359,13 @@ int Run() {
   //    ONE atomic AXTreeUpdate (text delta + tree-data caret move), exactly as
   //    blite_host.cc does (docs/03 §3.2).
   AXEventGenerator generator(tree_ptr);
-  editor.InsertText("!");  // merges into the last (plain) run -> run COUNT stable.
-  // NOTE: do NOT collapse runs here (e.g. editor.set_bold(false)) until the
-  // dynamic-node delegate lifetime is fixed: removing a run frees its AXNode but
-  // MaterializeDelegates is add-only, so the dropped run's delegate dangles and
-  // NVDA's reentrant get_accChild walks it mid-update -> DCHECK
-  // (!GetTreeUpdateInProgressState). FIX NEXT: BliteAXHost observes the tree and
-  // drops a node's delegate on OnNodeWillBeDeleted. (task 3.1 robustness)
+  editor.InsertText("!");
+  // COLLAPSE the runs (bold->normal everywhere) -> 2 runs become 1, REMOVING the
+  // run-2 nodes. This is the dynamic-node stress case: MaterializeDelegates (now a
+  // reconcile) drops the removed run's delegate after Unserialize and before any
+  // event fires, so NVDA's reentrant get_accChild never walks a dangling delegate
+  // (the 3.1-ROBUST crash). Also exercises the bold->not-bold attribute change.
+  editor.set_bold(false);
   AXTreeUpdate delta = bridge.BuildEditDelta(editor, tree_ptr);
   if (!tree_ptr->Unserialize(delta)) {
     std::cerr << "Unserialize failed: " << tree_ptr->error() << "\n";
