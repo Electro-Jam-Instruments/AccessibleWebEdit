@@ -203,12 +203,36 @@ grid `kSelectedChildrenChanged` and the focus cell `kFocus` in **cells mode**; k
 
 ---
 
-## Open decisions (need a call before/while building)
-- **D1 — desired-column** behavior across cells (preserve x when Up/Down change cells?). Default: yes, best-effort.
-- **D2 — enter-from-body target cell**: top-left always, or nearest column to the body caret's x? Default: top-left (simple), upgrade to column-match later.
-- **D3 — body↔table Shift selection**: v1 clamp to table edge (don't half-select a table from outside). Revisit.
-- **D4 — typing with a cell-block selected**: clear the block's contents + caret to anchor cell (recommended), vs. no-op.
-- **D5 — Tab semantics**: move to next cell (recommended) vs. insert a tab char in the cell.
+## Resolved decisions (user, 2026-06-28)
+- **D1 — desired-column: YES.** Preserve the desired column best-effort on Up/Down, including
+  across cell boundaries.
+- **D2 — enter-from-body target cell: column-match.** Entering the table (Down past the last
+  body line) lands in the cell nearest the body caret's column (consistent with D1), not always
+  top-left. (Interpreting the "yes" + the column-preservation preference; trivially falls back
+  to top-left when ambiguous.)
+- **D3 — selection across the table edge:**
+  - **From OUTSIDE in** (anchor in body, Shift-extend into the table) ⇒ **CELL selection** —
+    select whole cells (snap to the cell rectangle), never a half-selected cell from outside.
+  - **Starting INSIDE the table** ⇒ **TEXT selection within the cell until the focus crosses a
+    cell boundary**, then **promote to CELL selection** (the anchor-cell↔focus-cell rectangle).
+    This is the core same-cell⇒text / cross-cell⇒cells rule.
+- **D4 — Delete/typing on a selection: clear what is selected.** Text selection ⇒ delete the
+  text. CELL (block) selection ⇒ **clear the contents of the selected cell(s)** (empty them;
+  keep the rows/cols). Then place the caret at the anchor cell.
+- **D5 — Tab in a table = the WORD model** (researched: Microsoft Word — Tab navigates cells,
+  not a tab char; sources below):
+  - **Tab** ⇒ move to the **next cell** and **select that cell's entire text** (a whole-cell
+    TEXT selection; typing replaces it). Order: left→right, then first cell of the next row.
+  - **Shift+Tab** ⇒ move to the **previous cell** and select its text; no-op at the first cell.
+  - **Tab in the LAST cell** ⇒ **append a new row** and put the caret in its first cell.
+  - **Ctrl+Tab** ⇒ insert a literal **tab character** inside the current cell.
+  - (Google Docs differs — Tab just places the caret at the next cell's start without selecting;
+    we follow Word since the user asked for the Word behavior. The whole-cell text selection on
+    Tab maps cleanly to our same-cell text-selection mode and NVDA reads "‹cell text›, selected".)
+
+  Sources: [Set tabs in a table — Microsoft Support](https://support.microsoft.com/en-us/office/set-tabs-in-a-table-838918a7-b279-454b-b2c0-9dd10b19c984),
+  [Entering Tabs in a Table — WordTips](https://wordribbon.tips.net/T012932_Entering_Tabs_in_a_Table.html),
+  [How to insert a tab character in a Word table — Technolex](https://technolex.com/knowledge-hub/how-to-insert-a-tab-character-in-a-word-table/).
 
 ## Bottom line
 Make the caret a real text position that can live inside a cell, drive ONE of the two
