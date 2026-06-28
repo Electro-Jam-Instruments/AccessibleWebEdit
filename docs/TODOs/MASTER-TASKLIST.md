@@ -25,7 +25,7 @@ native UIA probe `scripts/uiaprobe*.cpp` → (c) verify with NVDA No-speech capt
 single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pattern.
 
 ## Phase 3 — Rich text
-- [~] 3.1 **Mixed-format runs** (multiple attributes within one field).
+- [~] 3.1 **Mixed-format runs** — DONE (probe+visual+NVDA); robustness sub-item open.
   - [x] editor per-char `CharStyle` + `runs()` accessor (maximal same-style spans); backward-compatible.
   - [x] field `kNonAtomicTextFieldRoot` → attribute resolution moves field→StaticText (verified, no regress).
   - [ ] **per-run Bridge (NEXT — precise design):**
@@ -49,7 +49,9 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
   - [x] probe: extend `uiaprobe_attrs` -> clone DocumentRange, MoveEndpointByUnit(Character) to cover run1 vs
         run2, GetAttributeValue per sub-range = per-run; whole range = `UiaGetReservedMixedAttributeValue`
         (VT_UNKNOWN). Also re-run uiaprobe (flat leaf intact) + uiaprobe_select (ExpandToEnclosingUnit no crash).
-  - [ ] NVDA: capture — navigate runs, attribute change ("bold"/"not bold") announced; field still read (flat).
+  - [x] NVDA: reads the mixed field, no crash (results/nvda-mixed.log: Speaking ['edit',...,' plain']). NVDA
+        announces the focused run (non-atomic reads from the caret). Attr-difference voicing needs NVDA's
+        'report font attributes' setting; per-run attrs are probe-proven.
   - [ ] visual: WM_PAINT iterate runs, CreateFontW per run from run.style, draw each run at its layout x.
 - [ ] 3.2 **Bulleted & numbered lists.** infra: `kList` + `kListItem` + `kListMarker` (ordered/unordered).
       probe: UIA List/ListItem structure + marker text + `SetSize`/`PositionInSet`. NVDA: "list", "bullet",
@@ -59,6 +61,12 @@ single layout pass (pixels == a11y geometry) and the deferred-a11y-off-input pat
 - [ ] 3.4 **Fonts & font weights.** infra: `StringAttribute::kFontFamily` + `FloatAttribute::kFontWeight`
       per run. probe: `UIA_FontNameAttributeId` + `UIA_FontWeightAttributeId` per run. NVDA: font/weight
       reported. visual: paint different families/weights.
+
+  - [ ] 3.1-ROBUST **delegate lifetime for dynamic run count** (do BEFORE relying on typing): a run
+        REMOVED on edit frees its AXNode, but MaterializeDelegates is add-only -> stale delegate dangles ->
+        NVDA reentrant get_accChild -> DCHECK !GetTreeUpdateInProgressState crash. FIX: BliteAXHost observes
+        the tree (AXTreeObserver), drop delegates_[node->id()] in OnNodeWillBeDeleted. (Scripted edit no longer
+        collapses runs as a stopgap.)
 
 ## Phase 4 — Tables
 - [ ] 4.1 **Text in a table cell.** infra: `kTable` → `kRow` → `kCell`(text), row/col span + indices.

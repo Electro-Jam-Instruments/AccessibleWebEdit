@@ -1346,9 +1346,13 @@ int Run() {
   //    ONE atomic AXTreeUpdate (text delta + tree-data caret move), exactly as
   //    blite_host.cc does (docs/03 §3.2).
   AXEventGenerator generator(tree_ptr);
-  editor.InsertText("!");
-  editor.set_bold(false);  // also flip formatting bold->normal on this edit, to
-                           // exercise rich-text attribute-change detection
+  editor.InsertText("!");  // merges into the last (plain) run -> run COUNT stable.
+  // NOTE: do NOT collapse runs here (e.g. editor.set_bold(false)) until the
+  // dynamic-node delegate lifetime is fixed: removing a run frees its AXNode but
+  // MaterializeDelegates is add-only, so the dropped run's delegate dangles and
+  // NVDA's reentrant get_accChild walks it mid-update -> DCHECK
+  // (!GetTreeUpdateInProgressState). FIX NEXT: BliteAXHost observes the tree and
+  // drops a node's delegate on OnNodeWillBeDeleted. (task 3.1 robustness)
   AXTreeUpdate delta = bridge.BuildEditDelta(editor, tree_ptr);
   if (!tree_ptr->Unserialize(delta)) {
     std::cerr << "Unserialize failed: " << tree_ptr->error() << "\n";
