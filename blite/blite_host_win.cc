@@ -115,6 +115,25 @@ constexpr AXNodeID kInline = 4;
 
 // The "custom surface": a trivial editor model. Real AccessibleWebEdit would
 // be a canvas with its own layout/selection; here we only need text + caret.
+// Per-character run style. The real editor's formatting unit. Extend with font
+// family / weight / color for Phase 3.4; lists/headings live on block nodes.
+struct CharStyle {
+  bool bold = false;
+  bool italic = false;
+  bool underline = false;
+  bool operator==(const CharStyle& o) const {
+    return bold == o.bold && italic == o.italic && underline == o.underline;
+  }
+  bool operator!=(const CharStyle& o) const { return !(*this == o); }
+};
+
+// A maximal span of consecutive characters sharing one CharStyle.
+struct StyleRun {
+  int start = 0;
+  int length = 0;
+  CharStyle style;
+};
+
 class MockCanvasEditor {
  public:
   const std::string& text() const { return text_; }
@@ -122,6 +141,7 @@ class MockCanvasEditor {
 
   void InsertText(const std::string& s) {
     text_.insert(caret_, s);
+    styles_.insert(styles_.begin() + caret_, s.size(), typing_style_);
     caret_ += static_cast<int>(s.size());
   }
 
@@ -129,16 +149,18 @@ class MockCanvasEditor {
   // IValueProvider::SetValue. Caret goes to the end, like committing a value.
   void SetText(const std::string& s) {
     text_ = s;
+    styles_.assign(s.size(), typing_style_);
     caret_ = static_cast<int>(text_.size());
   }
 
   // Keyboard editing ops (for the interactive --viewer mode). Each returns true
   // if the TEXT changed (vs. a pure caret move), so the host fires the right
-  // UIA events.
+  // UIA events. Per-char styles stay in lockstep with the text.
   bool Backspace() {
     if (caret_ <= 0)
       return false;
     text_.erase(caret_ - 1, 1);
+    styles_.erase(styles_.begin() + (caret_ - 1));
     --caret_;
     return true;
   }
@@ -146,6 +168,7 @@ class MockCanvasEditor {
     if (caret_ >= static_cast<int>(text_.size()))
       return false;
     text_.erase(caret_, 1);
+    styles_.erase(styles_.begin() + caret_);
     return true;
   }
   void MoveCaret(int delta) {
@@ -158,19 +181,48 @@ class MockCanvasEditor {
   void CaretHome() { caret_ = 0; }
   void CaretEnd() { caret_ = static_cast<int>(text_.size()); }
 
-  // Run formatting (mock: applies to the whole text). A real editor would carry
-  // per-run styles; this is enough to exercise UIA text attributes + changes.
-  bool bold() const { return bold_; }
-  bool italic() const { return italic_; }
-  bool underline() const { return underline_; }
-  void set_bold(bool b) { bold_ = b; }
+  // --- formatting (per-character) ------------------------------------------
+  CharStyle style_at(int i) const {
+    return (i >= 0 && i < static_cast<int>(styles_.size())) ? styles_[i]
+                                                            : typing_style_;
+  }
+  void SetRangeStyle(int start, int len, const CharStyle& s) {
+    for (int i = start; i < start + len && i < static_cast<int>(styles_.size());
+         ++i) {
+      if (i >= 0)
+        styles_[i] = s;
+    }
+  }
+  // Maximal same-style spans, in order. The bridge emits one text run per entry;
+  // the painter draws one styled run per entry. Empty text -> no runs.
+  std::vector<StyleRun> runs() const {
+    std::vector<StyleRun> out;
+    for (int i = 0; i < static_cast<int>(text_.size()); ++i) {
+      if (out.empty() || styles_[i] != out.back().style)
+        out.push_back(StyleRun{i, 1, styles_[i]});
+      else
+        out.back().length += 1;
+    }
+    return out;
+  }
+
+  // Backward-compat uniform accessors (used by the single-run paint + a11y paths
+  // until those go per-run): the first character's style, or the typing style.
+  bool bold() const { return style_at(0).bold; }
+  bool italic() const { return style_at(0).italic; }
+  bool underline() const { return style_at(0).underline; }
+  void set_bold(bool b) {
+    typing_style_.bold = b;
+    for (auto& s : styles_)
+      s.bold = b;
+  }
 
  private:
   std::string text_ = "hello";
+  std::vector<CharStyle> styles_ =
+      std::vector<CharStyle>(5, CharStyle{true, true, true});
   int caret_ = 5;
-  bool bold_ = true;
-  bool italic_ = true;
-  bool underline_ = true;
+  CharStyle typing_style_ = CharStyle{true, true, true};
 };
 
 // ---------------------------------------------------------------------------
@@ -289,7 +341,11 @@ void FillFieldNode(AXNodeData& node, const MockCanvasEditor& editor) {
   node.AddState(ax::mojom::State::kRichlyEditable);
   node.AddState(ax::mojom::State::kFocusable);
   node.SetValue(editor.text());  // pair Text with Value (MSDN)
-  // Atomic text field: UIA reads run attributes from the field itself.
+  // NON-atomic editable root: this moves UIA attribute resolution from the field
+  // DOWN to the inner per-run text leaves (GetLowestPlatformAncestor stops at the
+  // StaticText, not the field) -- the prerequisite for per-run (mixed) attributes.
+  // IsAtomicTextField() = IsTextField && !kNonAtomicTextFieldRoot (ax_node_data.cc).
+  node.AddBoolAttribute(ax::mojom::BoolAttribute::kNonAtomicTextFieldRoot, true);
   FillRunAttributes(node, editor);
   // Caret bounds from the SAME layout the window paints (docs/11/14 coupling):
   // the painted caret and the caret a screen reader announces share one source.
