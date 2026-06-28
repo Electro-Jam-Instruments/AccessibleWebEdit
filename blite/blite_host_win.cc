@@ -60,6 +60,7 @@
 #include <uiautomation.h>
 #include <wrl/client.h>
 
+#include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -153,18 +154,17 @@ struct BlockGroup {
 
 class MockCanvasEditor {
  public:
-  // Initial content is MIXED-FORMAT (two style runs): "Bold" (bold) + " plain".
-  // Block model below is scaffolding for 3.2 lists; this single line is one
-  // paragraph block. The list demo doc lands with the block-level Bridge.
+  // Demo doc for Phase 3.2: a paragraph title ("Groceries") + a 3-item bullet
+  // list (Apples/Bananas/Cherries). Exercises block structure (kList/kListItem/
+  // kListMarker) end-to-end. (Mixed-format runs proven separately, commit 0798d8d.)
   MockCanvasEditor() {
-    text_ = "Bold plain";
+    text_ = "Groceries\nApples\nBananas\nCherries";
     caret_ = static_cast<int>(text_.size());
-    const CharStyle bold_style{true, false, false};
     const CharStyle plain_style{false, false, false};
     styles_.assign(text_.size(), plain_style);
-    for (int i = 0; i < 4 && i < static_cast<int>(styles_.size()); ++i)
-      styles_[i] = bold_style;  // "Bold"
     typing_style_ = plain_style;
+    line_blocks_ = {BlockType::kParagraph, BlockType::kBullet,
+                    BlockType::kBullet, BlockType::kBullet};
   }
 
   const std::string& text() const { return text_; }
@@ -418,33 +418,125 @@ void FillFieldNode(AXNodeData& node, const MockCanvasEditor& editor) {
 // root), §2.1/§2.2 (selection in AXTreeData).
 class Bridge {
  public:
-  // Node ids per run i: StaticText = 3+2i, InlineTextBox = 4+2i. Run 0 keeps
-  // kText=3/kInline=4 (back-compat with the single-run helpers + bounds).
-  static int RunStaticTextId(int i) { return 3 + 2 * i; }
-  static int RunInlineId(int i) { return 4 + 2 * i; }
-
-  // Build the WHOLE tree from the editor: one StaticText+InlineTextBox per style
-  // run (each carrying that run's attributes -> per-run UIA attributes, with the
-  // field non-atomic). Used for both the initial tree and every edit delta (full
-  // rebuild -- the run COUNT can change; our manual UIA event firing does not
-  // rely on the AXEventGenerator's per-node diff).
+  // Build the WHOLE tree from the editor, block by block (docs/03): the field
+  // contains paragraph text runs directly, and each list group becomes a
+  // kList -> kListItem(kListMarker + text) subtree. Ids are allocated
+  // sequentially (kRoot=1, kField=2 fixed; structure from 3 up) and the tree is
+  // emitted pre-order (parents before children). Used for the initial tree and
+  // every edit delta (full rebuild -- node COUNT changes; the delegate reconcile
+  // + our manual UIA event firing handle that).
   AXTreeUpdate BuildTree(const MockCanvasEditor& editor, AXTreeID tree_id) {
     AXTreeUpdate update;
     update.has_tree_data = true;
     update.tree_data.focus_id = kField;
     update.tree_data.tree_id = tree_id;
+    update.root_id = kRoot;
 
-    std::vector<StyleRun> runs = editor.runs();
-    if (runs.empty())
-      runs.push_back(StyleRun{0, 0, editor.style_at(0)});  // empty text -> 1 run
+    const std::string& text = editor.text();
+    struct Line {
+      int start;
+      int len;
+    };
+    std::vector<Line> lines;
+    {
+      int s = 0;
+      const int n = static_cast<int>(text.size());
+      for (int i = 0; i <= n; ++i)
+        if (i == n || text[i] == '\n') {
+          lines.push_back({s, i - s});
+          s = i + 1;
+        }
+    }
 
-    // Caret -> the run that owns it, at a LOCAL offset on that run's inline box.
-    int sel_node = RunInlineId(0), sel_local = 0;
+    int next_id = 3;
+    auto NewId = [&]() { return next_id++; };
+    std::map<int, AXNodeData> nodes;
+    std::vector<int> line_inline(lines.size(), 0);  // inline-box id per line
+
+    AXNodeData root;
+    root.id = kRoot;
+    root.role = ax::mojom::Role::kRootWebArea;
+    root.child_ids = {kField};
+    nodes[kRoot] = root;
+
+    AXNodeData field;
+    FillFieldNode(field, editor);  // id/role/states/value/non-atomic/caret bounds
+    field.child_ids.clear();
+
+    // Emit a StaticText+InlineTextBox pair for one line; append the StaticText to
+    // `parent`. One run per line for now (per-run mixed lives WITHIN a line as a
+    // later merge; mixed-format is proven separately, commit 0798d8d).
+    auto EmitText = [&](int li, std::vector<int32_t>* parent) {
+      const std::string s = text.substr(lines[li].start, lines[li].len);
+      const CharStyle style = editor.style_at(lines[li].start);
+      const int stid = NewId(), inid = NewId();
+      AXNodeData stn;
+      stn.id = stid;
+      stn.role = ax::mojom::Role::kStaticText;
+      stn.SetName(s);
+      FillRunAttributes(stn, style);
+      stn.child_ids = {inid};
+      AXNodeData inn;
+      inn.id = inid;
+      inn.role = ax::mojom::Role::kInlineTextBox;
+      inn.SetName(s);
+      std::vector<int32_t> offs;
+      for (int k = 0; k < static_cast<int>(s.size()); ++k)
+        offs.push_back(static_cast<int32_t>((k + 1) * 7));
+      inn.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
+                              offs);
+      FillRunAttributes(inn, style);
+      nodes[stid] = stn;
+      nodes[inid] = inn;
+      line_inline[li] = inid;
+      parent->push_back(stid);
+    };
+
+    for (const BlockGroup& g : editor.block_groups()) {
+      if (!g.is_list()) {
+        EmitText(g.first_line, &field.child_ids);  // paragraph -> text in field
+        continue;
+      }
+      const int list_id = NewId();
+      AXNodeData list;
+      list.id = list_id;
+      list.role = ax::mojom::Role::kList;
+      list.AddIntAttribute(ax::mojom::IntAttribute::kSetSize, g.line_count);
+      field.child_ids.push_back(list_id);
+      for (int k = 0; k < g.line_count; ++k) {
+        const int li = g.first_line + k;
+        const int item_id = NewId();
+        AXNodeData item;
+        item.id = item_id;
+        item.role = ax::mojom::Role::kListItem;
+        item.AddIntAttribute(ax::mojom::IntAttribute::kPosInSet, k + 1);
+        item.AddIntAttribute(ax::mojom::IntAttribute::kSetSize, g.line_count);
+        const int marker_id = NewId();
+        AXNodeData marker;
+        marker.id = marker_id;
+        marker.role = ax::mojom::Role::kListMarker;
+        marker.SetName(g.type == BlockType::kNumber
+                           ? (std::to_string(k + 1) + ".")
+                           : std::string("\xE2\x80\xA2"));  // U+2022 bullet
+        item.child_ids.push_back(marker_id);
+        EmitText(li, &item.child_ids);  // item text after the marker
+        nodes[marker_id] = marker;
+        nodes[item_id] = item;
+        list.child_ids.push_back(item_id);
+      }
+      nodes[list_id] = list;
+    }
+
+    nodes[kField] = field;
+
+    // Selection: caret -> owning line -> that line's inline box at local offset.
+    int sel_node = kField, sel_local = 0;
     const int caret = editor.caret();
-    for (int i = 0; i < static_cast<int>(runs.size()); ++i) {
-      if (caret >= runs[i].start && caret <= runs[i].start + runs[i].length) {
-        sel_node = RunInlineId(i);
-        sel_local = caret - runs[i].start;
+    for (int li = 0; li < static_cast<int>(lines.size()); ++li) {
+      if (caret >= lines[li].start && caret <= lines[li].start + lines[li].len) {
+        sel_node = line_inline[li] ? line_inline[li] : kField;
+        sel_local = caret - lines[li].start;
+        break;
       }
     }
     update.tree_data.sel_anchor_object_id = sel_node;
@@ -452,44 +544,16 @@ class Bridge {
     update.tree_data.sel_focus_object_id = sel_node;
     update.tree_data.sel_focus_offset = sel_local;
 
-    update.root_id = kRoot;
-    AXNodeData root;
-    root.id = kRoot;
-    root.role = ax::mojom::Role::kRootWebArea;
-    root.child_ids = {kField};
-    update.nodes.push_back(root);
-
-    AXNodeData field;
-    FillFieldNode(field, editor);  // id/role/states/value/non-atomic/caret bounds
-    field.child_ids.clear();
-    for (int i = 0; i < static_cast<int>(runs.size()); ++i)
-      field.child_ids.push_back(RunStaticTextId(i));
-    update.nodes.push_back(field);
-
-    for (int i = 0; i < static_cast<int>(runs.size()); ++i) {
-      const StyleRun& r = runs[i];
-      const std::string run_text = editor.text().substr(r.start, r.length);
-      AXNodeData stn;
-      stn.id = RunStaticTextId(i);
-      stn.role = ax::mojom::Role::kStaticText;
-      stn.SetName(run_text);
-      FillRunAttributes(stn, r.style);  // per-run attrs on the platform leaf
-      stn.child_ids = {RunInlineId(i)};
-      update.nodes.push_back(stn);
-
-      AXNodeData inn;
-      inn.id = RunInlineId(i);
-      inn.role = ax::mojom::Role::kInlineTextBox;
-      inn.SetName(run_text);
-      std::vector<int32_t> offs;
-      offs.reserve(run_text.size());
-      for (int k = 0; k < static_cast<int>(run_text.size()); ++k)
-        offs.push_back(static_cast<int32_t>((k + 1) * 7));
-      inn.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
-                              offs);
-      FillRunAttributes(inn, r.style);
-      update.nodes.push_back(inn);
-    }
+    // Emit pre-order so parents precede children in update.nodes.
+    std::function<void(int)> emit = [&](int id) {
+      auto it = nodes.find(id);
+      if (it == nodes.end())
+        return;
+      update.nodes.push_back(it->second);
+      for (int c : it->second.child_ids)
+        emit(c);
+    };
+    emit(kRoot);
     return update;
   }
 
@@ -977,8 +1041,18 @@ gfx::NativeViewAccessible BliteNodeDelegate::GetParent() const {
 // and GetFromNodeID still resolves the (still-present) inner platform nodes.
 static bool HidesChildrenFromUIA(const AXNode* node) {
   const ax::mojom::Role role = node->GetRole();
-  return role == ax::mojom::Role::kTextField ||
-         role == ax::mojom::Role::kStaticText;
+  // A StaticText is always a leaf -- its inline box is for AXPosition only.
+  if (role == ax::mojom::Role::kStaticText)
+    return true;
+  // A text field is a FLAT leaf (NVDA text nav) UNLESS it contains block
+  // structure (a list): then expose that structure so NVDA can navigate it.
+  if (role == ax::mojom::Role::kTextField) {
+    for (size_t i = 0; i < node->GetChildCount(); ++i)
+      if (node->GetChildAtIndex(i)->GetRole() == ax::mojom::Role::kList)
+        return false;  // structured field -> children navigable
+    return true;       // plain field -> flat leaf
+  }
+  return false;  // list / listitem / listmarker / inline box: navigable as built
 }
 
 size_t BliteNodeDelegate::GetChildCount() const {
